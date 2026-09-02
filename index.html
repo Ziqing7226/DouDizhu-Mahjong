@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <!--
+    斗地主 —— 纯前端单机斗地主游戏
+    Copyright (C) 2026 Ziqing7226
+    SPDX-License-Identifier: GPL-3.0-or-later
+    本程序为自由软件：可在 GNU 通用公共许可证第 3 版（或按你的选择任何更高版本）
+    条款下重新分发和/或修改，许可证全文见仓库根目录的 LICENSE 文件。
+  -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>斗地主</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- ============ 顶栏 ============ -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">斗地主</span>
+      </div>
+      <div class="topbar-right">
+        <div class="seg" id="diffSeg">
+          <button data-d="easy">新手</button>
+          <button data-d="hard" class="on">高手</button>
+          <button data-d="master">大师</button>
+        </div>
+        <button class="icon-btn" id="btnMusic" title="背景音乐开关">🎵</button>
+        <input type="range" class="vol-slider" id="volMusic" min="0" max="100" value="40" title="音乐音量">
+        <button class="icon-btn" id="btnVoice" title="语音播报开关">🗣</button>
+        <button class="icon-btn" id="btnSound" title="音效开关">🔊</button>
+        <button class="icon-btn" id="btnStats" title="战绩统计">📊</button>
+        <button class="icon-btn" id="btnHelp" title="玩法规则">?</button>
+      </div>
+    </header>
+
+    <div class="main">
+
+      <!-- ============ 牌桌 ============ -->
+      <div class="play-area" id="playArea">
+
+        <div class="top-row">
+          <div class="player-box" id="box-2"></div>
+
+          <div class="center-top">
+            <div class="bottom-cards" id="bottomCards"></div>
+            <div class="bottom-label">底 牌</div>
+            <div class="mult-badge" id="multBadge">底分 100 · 倍数 ×1</div>
+          </div>
+
+          <div class="player-box" id="box-1"></div>
+        </div>
+
+        <div class="table-center" id="tableCenter">
+          <div class="play-slot" data-seat="2">
+            <div class="cards"></div>
+          </div>
+          <div class="play-slot" data-seat="1">
+            <div class="cards"></div>
+          </div>
+          <div class="play-slot" data-seat="0">
+            <div class="cards"></div>
+          </div>
+        </div>
+
+        <div class="my-row">
+          <div class="player-box" id="box-0"></div>
+          <div class="hand-wrap">
+            <div class="hand" id="myHand"></div>
+          </div>
+          <div class="action-bar">
+            <button class="btn" id="btnPlay">出牌</button>
+            <button class="btn ghost" id="btnPass">不要</button>
+            <button class="btn ghost" id="btnHint">提示</button>
+            <button class="btn ghost" id="btnClear">重选</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ============ 侧栏 ============ -->
+      <aside class="sidebar">
+        <div class="panel">
+          <h3>记 牌 器 <span class="sub">未出现的牌</span></h3>
+          <div class="counter-grid" id="counterGrid"></div>
+        </div>
+
+        <div class="panel">
+          <h3>对 局 信 息</h3>
+          <div class="info-list" id="infoList"></div>
+        </div>
+
+        <div class="panel">
+          <h3>出 牌 记 录</h3>
+          <div class="log-list" id="logList"></div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- ============ 浮层 ============ -->
+  <div id="floatLayer"></div>
+  <div class="overlay" id="overlay">
+    <div class="dialog" id="dialog"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="js/cards.js"></script>
+  <script src="js/decompose.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/music.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+
+</html>
