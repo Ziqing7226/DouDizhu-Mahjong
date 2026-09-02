@@ -27,7 +27,7 @@
   var TURN_SECONDS = 30;   // 玩家回合倒计时
 
   var G = {
-    phase: 'idle',        // idle | bidding | doubling | playing | over
+    phase: 'lobby',       // lobby | bidding | doubling | playing | over
     gen: 0,               // 局次令牌：每开新局 +1，用于丢弃上一局的遗留回调
     players: [],
     bottom: [],
@@ -49,10 +49,42 @@
     hints: [],
     hintIdx: 0,
     difficulty: 'hard',
+    nextOpponents: null,  // 下一次开局使用的对手（进入大厅时刷新；「再来一局」保持不变）
     busy: false,
     timer: null,
     timeLeft: 0
   };
+
+  /* ================= 对手网名 ================= */
+
+  /* AI 对手的随机网名池：形容词 + 名词组合，头像从表情池抽取。
+   * 每次回到选场大厅都会重新抽取，营造「换个桌子换了批牌友」的感觉；
+   * 「再来一局」不经过大厅，因此还是原来那两位。 */
+  var NAME_HEADS = ['快乐的', '犯困的', '摸鱼的', '无敌的', '低调的', '吃瓜的', '追风的',
+    '熬夜的', '种花的', '打铁的', '看海的', '会飞的', '爱笑的', '营业中的',
+    '深藏不露的', '刚睡醒的', '热衷背锅的', '只想赢的', '燃烧卡路里的', '不露声色的'];
+  var NAME_TAILS = ['小鱼干', '土豆侠', '猫头鹰', '河豚', '松鼠', '老王', '柯基',
+    '外卖员', '钢琴师', '码头工', '冰淇淋', '打工人', '小钢炮', '扫地僧',
+    '西瓜太郎', '夜猫子', '牛奶糖', '老司机', '小诸葛', '钓鱼佬'];
+  var OPP_AVATARS = ['🐯', '🐼', '🐸', '🦊', '🐻', '🐨', '🦁', '🐵', '🐰', '🐷',
+    '🐮', '🐺', '🦉', '🐙', '🦖', '🐳'];
+
+  function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+
+  function makeOpponent(excludeNames) {
+    var name = '', guard = 0;
+    do {
+      name = pick(NAME_HEADS) + pick(NAME_TAILS);
+    } while (excludeNames && excludeNames.indexOf(name) >= 0 && guard++ < 30);
+    return { name: name, avatar: pick(OPP_AVATARS) };
+  }
+
+  function rollOpponents() {
+    var a = makeOpponent(null);
+    var b = makeOpponent([a.name]);
+    G.nextOpponents = [a, b];
+    return G.nextOpponents;
+  }
 
   /* ================= 工具 ================= */
 
@@ -158,12 +190,14 @@
     UI.closeFloat();
     UI.closeDialog();
     UI.clearAllSlots();
+    UI.hideLobby();
 
     var deck = riggedDeck(G.difficulty);
+    var opp = G.nextOpponents || rollOpponents();
     G.players = [
       { seat: 0, name: '我', avatar: '🙂', isAI: false, hand: Cards.sortCards(deck.slice(0, 17)), role: null, bid: 0, doubled: 0 },
-      { seat: 1, name: '小豆', avatar: '🐯', isAI: true, hand: Cards.sortCards(deck.slice(17, 34)), role: null, bid: 0, doubled: 0 },
-      { seat: 2, name: '阿欢', avatar: '🐼', isAI: true, hand: Cards.sortCards(deck.slice(34, 51)), role: null, bid: 0, doubled: 0 }
+      { seat: 1, name: opp[0].name, avatar: opp[0].avatar, isAI: true, hand: Cards.sortCards(deck.slice(17, 34)), role: null, bid: 0, doubled: 0 },
+      { seat: 2, name: opp[1].name, avatar: opp[1].avatar, isAI: true, hand: Cards.sortCards(deck.slice(34, 51)), role: null, bid: 0, doubled: 0 }
     ];
     G.bottom = deck.slice(51, 54);
     G.landlord = -1;
@@ -743,12 +777,32 @@
       '</div>',
       [
         { text: '再来一局', cls: 'gold', onClick: newGame },
-        { text: '查看战绩', cls: 'ghost', onClick: showStats }
+        { text: '查看战绩', cls: 'ghost', keepOpen: true, onClick: showStats },
+        { text: '换个场次', cls: 'ghost', onClick: enterLobby }
       ]
     );
 
     log('—— ' + P(winner).name + ' 获胜，' + (iWin ? '我 +' : '我 ') + delta + ' 分 ——', true);
     renderAll();
+  }
+
+  /* ================= 选场大厅 ================= */
+
+  /** 回到选场大厅：作废当前对局、抽取一批新的对手网名（「换个桌子换了批牌友」） */
+  function enterLobby() {
+    G.gen++;
+    clearTimer();
+    G.phase = 'lobby';
+    G.thinkingSeat = -1;
+    G.busy = false;
+    rollOpponents();
+    UI.closeFloat();
+    UI.closeDialog();
+    UI.clearAllSlots();
+    UI.setActions({ play: false, pass: false, hint: false, clear: false });
+    highlightLobbyRooms();
+    UI.showLobby();
+    if (G.players.length === 3) renderAll();
   }
 
   /* ================= 弹窗内容 ================= */
@@ -884,16 +938,25 @@
     UI.el('btnStats').addEventListener('click', showStats);
     UI.el('btnHelp').addEventListener('click', showHelp);
 
-    UI.el('diffSeg').addEventListener('click', function (e) {
-      var b = e.target.closest('button');
-      if (!b) return;
-      G.difficulty = b.dataset.d;
-      Store.setPrefs({ difficulty: G.difficulty });
-      syncTopbar();
-      UI.setHintVisible(hintEnabled());   // 切到大师立即隐藏提示按钮
-      UI.toast('难度已切换为「' + AI.CFG[G.difficulty].name + '」，下局生效', 1500);
-      Sound.play('select');
-      updateInfo();
+    // 选场大厅：点击场次按钮 → 记住难度，立即开局
+    var roomBtns = UI.el('lobby').querySelectorAll('button');
+    for (var ri = 0; ri < roomBtns.length; ri++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          var d = btn.dataset.d;
+          if (!d || G.phase !== 'lobby') return;
+          G.difficulty = d;
+          Store.setPrefs({ difficulty: d });
+          UI.setHintVisible(hintEnabled());   // 大师档整局隐藏提示按钮
+          UI.hideLobby();
+          newGame();
+        });
+      })(roomBtns[ri]);
+    }
+
+    // 对局结束后，只要关掉了所有弹窗（含战绩/规则），就回到选场大厅
+    UI.setDialogCloseHandler(function () {
+      if (G.phase === 'over') enterLobby();
     });
 
     document.addEventListener('keydown', function (e) {
@@ -910,7 +973,16 @@
       document.removeEventListener('pointerdown', once);
     });
 
-    newGame();
+    // 进入游戏先停在选场大厅，等玩家挑好场次再开局
+    enterLobby();
+  }
+
+  /** 大厅里高亮上次选择的场次 */
+  function highlightLobbyRooms() {
+    var roomBtns = UI.el('lobby').querySelectorAll('button');
+    for (var i = 0; i < roomBtns.length; i++) {
+      roomBtns[i].classList.toggle('last', roomBtns[i].dataset.d === G.difficulty);
+    }
   }
 
   /** 局势情绪：有人快走完或倍数飙升时切换紧张型旋律 */
@@ -926,10 +998,6 @@
   }
 
   function syncTopbar() {
-    var btns = UI.el('diffSeg').querySelectorAll('button');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('on', btns[i].dataset.d === G.difficulty);
-    }
     var sb = UI.el('btnSound');
     sb.textContent = Sound.isEnabled() ? '🔊' : '🔇';
     sb.classList.toggle('off', !Sound.isEnabled());
@@ -956,7 +1024,8 @@
     init();
   }
 
-  global.Game = { G: G, newGame: newGame, hintEnabled: hintEnabled,
+  global.Game = { G: G, newGame: newGame, enterLobby: enterLobby,
+    hintEnabled: hintEnabled, rollOpponents: rollOpponents,
     handStrength: handStrength, riggedDeck: riggedDeck };
 
 })(typeof window !== 'undefined' ? window : globalThis);

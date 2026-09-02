@@ -24,11 +24,6 @@
         <span class="logo">斗地主</span>
       </div>
       <div class="topbar-right">
-        <div class="seg" id="diffSeg">
-          <button data-d="easy">新手</button>
-          <button data-d="hard" class="on">高手</button>
-          <button data-d="master">大师</button>
-        </div>
         <button class="icon-btn" id="btnMusic" title="背景音乐开关">🎵</button>
         <input type="range" class="vol-slider" id="volMusic" min="0" max="100" value="40" title="音乐音量">
         <button class="icon-btn" id="btnVoice" title="语音播报开关">🗣</button>
@@ -42,6 +37,32 @@
 
       <!-- ============ 牌桌 ============ -->
       <div class="play-area" id="playArea">
+
+        <!-- ============ 选场大厅（覆盖牌桌） ============ -->
+        <div class="lobby" id="lobby">
+          <div class="lobby-card">
+            <div class="lobby-title">选 择 场 次</div>
+            <div class="lobby-sub">挑选你的对手，即刻开局</div>
+            <div class="lobby-rooms">
+              <button class="room-btn" data-d="easy">
+                <span class="room-icon">🌱</span>
+                <span class="room-name">新手场</span>
+                <span class="room-desc">AI 出牌随意，适合练手熟悉规则</span>
+              </button>
+              <button class="room-btn" data-d="hard">
+                <span class="room-icon">⚔️</span>
+                <span class="room-name">高手场</span>
+                <span class="room-desc">AI 会记牌推演、配合围堵，来真的</span>
+              </button>
+              <button class="room-btn" data-d="master">
+                <span class="room-icon">👑</span>
+                <span class="room-name">大师场</span>
+                <span class="room-desc">AI 全知全能，能看穿你的每一条逃牌路线</span>
+              </button>
+            </div>
+            <div class="lobby-note">每局结束后可随时返回这里更换场次</div>
+          </div>
+        </div>
 
         <div class="top-row">
           <div class="player-box" id="box-2"></div>

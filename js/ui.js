@@ -23,7 +23,7 @@
     ['playArea', 'bottomCards', 'multBadge', 'tableCenter', 'myHand',
       'btnPlay', 'btnPass', 'btnHint', 'btnClear', 'overlay', 'dialog',
       'toast', 'counterGrid', 'infoList', 'logList', 'floatLayer',
-      'btnSound', 'btnStats', 'btnHelp', 'diffSeg'
+      'btnSound', 'btnStats', 'btnHelp', 'lobby'
     ].forEach(function (id) { DOM[id] = el(id); });
     DOM.boxes = [el('box-0'), el('box-1'), el('box-2')];
     DOM.slots = {
@@ -413,6 +413,22 @@
 
   /* ---------------- 弹窗 ---------------- */
 
+  /**
+   * 弹窗关闭通知：closeDialog 及弹窗按钮触发的真实「打开→关闭」转变
+   * 都会回调注册的处理器。按钮路径刻意把通知放在 onClick 之后执行，
+   * 这样「再来一局」先切回对局阶段，处理器看到 phase 已不是 over，就不会误回大厅。
+   */
+  var dialogCloseHandler = null;
+  function setDialogCloseHandler(fn) { dialogCloseHandler = fn; }
+
+  function overlayShown() { return DOM.overlay.classList.contains('show'); }
+
+  function hideOverlay() { DOM.overlay.classList.remove('show'); }
+
+  function notifyDialogClosed() {
+    if (dialogCloseHandler) dialogCloseHandler();
+  }
+
   function showDialog(html, buttons) {
     DOM.dialog.innerHTML = html;
     var actions = document.createElement('div');
@@ -422,8 +438,10 @@
       btn.className = 'btn ' + (b.cls || '');
       btn.textContent = b.text;
       btn.addEventListener('click', function () {
-        if (b.keepOpen !== true) closeDialog();
+        var wasShown = overlayShown();
+        if (b.keepOpen !== true) hideOverlay();
         if (b.onClick) b.onClick();
+        if (wasShown && b.keepOpen !== true) notifyDialogClosed();
       });
       actions.appendChild(btn);
     });
@@ -431,7 +449,17 @@
     DOM.overlay.classList.add('show');
   }
 
-  function closeDialog() { DOM.overlay.classList.remove('show'); }
+  function closeDialog() {
+    var wasShown = overlayShown();
+    hideOverlay();
+    if (wasShown) notifyDialogClosed();
+  }
+
+  /* ---------------- 选场大厅 ---------------- */
+
+  function showLobby() { DOM.lobby.classList.add('show'); }
+
+  function hideLobby() { DOM.lobby.classList.remove('show'); }
 
   /* ---------------- 操作栏 ---------------- */
 
@@ -462,6 +490,8 @@
     toast: toast, bombEffect: bombEffect, springBanner: springBanner,
     floatPanel: floatPanel, closeFloat: closeFloat,
     showDialog: showDialog, closeDialog: closeDialog,
+    setDialogCloseHandler: setDialogCloseHandler,
+    showLobby: showLobby, hideLobby: hideLobby,
     setActions: setActions, setHintVisible: setHintVisible
   };
 

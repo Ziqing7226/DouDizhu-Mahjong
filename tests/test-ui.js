@@ -510,6 +510,19 @@ function playOneGame(maxFlush) {
 
 // 允许每局最多 4000 次调度
 const GAMES = Number(process.env.GAMES || (process.argv.includes('--full') ? 40 : 15));
+
+// 进入游戏先停在选场大厅，点「高手场」开启首局
+const lobbyEl = registry.lobby;
+ok(!!lobbyEl && lobbyEl.classList.contains('show'), '首局开始前应停在选场大厅');
+const firstRoom = lobbyEl && lobbyEl.querySelectorAll('button').find(b => b.dataset.d === 'hard');
+ok(!!firstRoom, '大厅缺少高手场按钮');
+click(firstRoom);
+ok(!lobbyEl.classList.contains('show'), '选好场次后大厅应隐藏');
+ok(G.difficulty === 'hard', '选场后难度应为 hard，实际 ' + G.difficulty);
+ok(G.phase === 'bidding', '选场后应进入叫分阶段，实际 ' + G.phase);
+flushOne();
+
+let rematchNamesKept = true;
 for (let i = 0; i < GAMES; i++) {
   const r = playOneGame(4000);
   if (r.err) { gameErr = r.err; console.log('  ⚠ 第 ' + (i + 1) + ' 局中断: ' + r.err); break; }
@@ -525,11 +538,41 @@ for (let i = 0; i < GAMES; i++) {
   }
   if (G.landlord === 0) results.landlordWins = ctx.Store.getStats().landlordWins;
 
-  // 点「再来一局」开新局
+  // 点「再来一局」开新局：对手应是原来那两位（名字不变）
+  const namesBefore = [G.players[1].name, G.players[2].name];
+  const oppBefore = G.nextOpponents;
   const againBtn = dialog.querySelectorAll('.btn').find(b => b.textContent === '再来一局');
   if (!againBtn) { gameErr = '结算面板缺少「再来一局」按钮'; break; }
   click(againBtn);
+  if (G.players[1].name !== namesBefore[0] || G.players[2].name !== namesBefore[1] ||
+      G.nextOpponents !== oppBefore) {
+    rematchNamesKept = false;
+    break;
+  }
   // 新局会重置为发牌态
+  flushOne();
+}
+ok(rematchNamesKept, '「再来一局」后对手名字应保持不变');
+
+// 结算面板应有「换个场次」按钮：点击后回到选场大厅，并重新抽取对手网名
+{
+  const dialog = registry.dialog;
+  const swapBtn = dialog.querySelectorAll('.btn').find(b => b.textContent === '换个场次');
+  ok(!!swapBtn, '结算面板缺少「换个场次」按钮');
+  const oppBefore = G.nextOpponents;
+  click(swapBtn);
+  ok(lobbyEl.classList.contains('show'), '点「换个场次」后应回到选场大厅');
+  ok(G.phase === 'lobby', '换个场次后阶段应为 lobby，实际 ' + G.phase);
+  ok(!registry.overlay.classList.contains('show'), '换个场次后弹窗应关闭');
+  ok(G.nextOpponents !== oppBefore, '回到大厅后应重新抽取对手网名');
+
+  // 大厅再选「新手场」，新对手网名应落地到对局
+  const easyRoom = lobbyEl.querySelectorAll('button').find(b => b.dataset.d === 'easy');
+  click(easyRoom);
+  ok(G.phase === 'bidding' && G.difficulty === 'easy', '换场后应以新难度开新局');
+  ok(G.players[1].name === G.nextOpponents[0].name && G.players[2].name === G.nextOpponents[1].name,
+    '换场后对手应使用新抽取的网名');
+  ok(G.players[1].name !== '小豆' && G.players[2].name !== '阿欢', '不应再出现旧的写死网名');
   flushOne();
 }
 
@@ -566,26 +609,23 @@ ok(registry.bottomCards.children.length === 3, '底牌区应显示 3 张牌');
 ok(!!ctx.UI.DOM.slots[0] && !!ctx.UI.DOM.slots[1] && !!ctx.UI.DOM.slots[2], '出牌槽位未正确绑定');
 
 /* ============================================================
- * 8. 交互：难度切换 / 音效 / 弹窗 / 快捷键
+ * 8. 交互：选场大厅 / 音效 / 弹窗 / 快捷键
  * ============================================================ */
 console.log('\n=== 交互 ===');
 
-const seg = registry.diffSeg;
-const segHandler = seg && seg._h && seg._h.click;
-ok(!!segHandler, '难度切换未绑定事件');
-if (segHandler) {
-  const hardBtn = seg.querySelectorAll('button').find(b => b.dataset.d === 'hard');
-  segHandler({ target: hardBtn, preventDefault() { } });
-  ok(G.difficulty === 'hard', '点击高手后难度未切换，当前 ' + G.difficulty);
-  const easyBtn = seg.querySelectorAll('button').find(b => b.dataset.d === 'easy');
-  segHandler({ target: easyBtn, preventDefault() { } });
-  ok(G.difficulty === 'easy', '点击新手后难度未切换，当前 ' + G.difficulty);
-  segHandler({ target: seg.querySelectorAll('button').find(b => b.dataset.d === 'master'), preventDefault() { } });
-  ok(G.difficulty === 'master', '点击大师后难度未切换，当前 ' + G.difficulty);
-  ok(ctx.Game.hintEnabled() === false, '大师模式下提示未禁用');
-  segHandler({ target: hardBtn, preventDefault() { } });
-  ok(ctx.Game.hintEnabled() === true, '非大师模式下提示应可用');
-}
+// 初始应停在选场大厅，等玩家选场次
+const lobby = registry.lobby;
+ok(!!lobby, '选场大厅元素不存在');
+ok(lobby.classList.contains('show'), '进入游戏后应先显示选场大厅');
+ok(G.phase === 'lobby', '初始阶段应为 lobby，实际 ' + G.phase);
+const roomBtns = lobby.querySelectorAll('button');
+ok(roomBtns.length === 3, '大厅应有 3 个场次按钮，实际 ' + roomBtns.length);
+ok(roomBtns.every(b => b._h && b._h.click), '场次按钮未绑定点击事件');
+ok(roomBtns.some(b => b.dataset.d === 'easy') && roomBtns.some(b => b.dataset.d === 'hard') &&
+  roomBtns.some(b => b.dataset.d === 'master'), '大厅场次按钮 data-d 不全');
+
+// 顶栏不应再有难度切换按钮
+ok(!registry.diffSeg, '顶栏的难度切换按钮应已删除');
 
 // 音效开关
 const soundBtn = registry.btnSound;

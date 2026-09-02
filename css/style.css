@@ -680,6 +680,108 @@ body {
   color: #4a1c00;
 }
 
+/* ---------------- 选场大厅 ---------------- */
+
+.lobby {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(255, 215, 120, .12), transparent 55%),
+    rgba(6, 18, 11, .82);
+  backdrop-filter: blur(5px);
+  z-index: 45;
+}
+.lobby.show { display: flex; }
+
+.lobby-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 30px 42px 24px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(60, 12, 8, .96), rgba(25, 6, 4, .96));
+  border: 2px solid var(--gold);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .65), inset 0 0 40px rgba(247, 201, 72, .08);
+  max-width: 92%;
+}
+
+.lobby-title {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  background: linear-gradient(180deg, #fff6d5, var(--gold) 60%, #d99b10);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+}
+.lobby-sub {
+  margin-top: -10px;
+  font-size: 13px;
+  color: #e8d5b0;
+  opacity: .85;
+  letter-spacing: 2px;
+}
+
+.lobby-rooms { display: flex; gap: 18px; }
+
+.room-btn {
+  width: 168px;
+  padding: 20px 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 215, 130, .45);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02));
+  color: #ffe9b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: transform .16s, box-shadow .16s, border-color .16s;
+}
+.room-btn:hover {
+  transform: translateY(-6px);
+  border-color: var(--gold);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .5), 0 0 18px rgba(247, 201, 72, .35);
+}
+.room-btn:active { transform: translateY(-2px); }
+.room-btn.last { border-color: var(--gold); box-shadow: 0 0 14px rgba(247, 201, 72, .28); }
+.room-btn.last::after {
+  content: "上次玩过";
+  font-size: 10px;
+  color: #4a1c00;
+  background: linear-gradient(180deg, #ffe9a8, var(--gold));
+  padding: 1px 8px;
+  border-radius: 8px;
+  margin-top: -2px;
+}
+
+.room-icon { font-size: 34px; line-height: 1; }
+.room-name {
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #fff3cd;
+}
+.room-desc {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #d8c8a8;
+  opacity: .9;
+  min-height: 35px;
+}
+
+.lobby-note {
+  font-size: 11px;
+  color: #bfae90;
+  opacity: .75;
+  letter-spacing: 1px;
+}
+
 .icon-btn {
   width: 34px; height: 30px;
   border-radius: 9px;
