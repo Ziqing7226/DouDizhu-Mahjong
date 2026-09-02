@@ -43,23 +43,29 @@
   var NUM_CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
   var HONOR_FACE = ['東', '南', '西', '北', '中', '發', ''];
 
-  /** 各点数的行排列（1 = 一枚），列出的从 2 起；1 特判 */
+  /** 各点数的行排列（1 = 一枚）。
+   *  3筒为斜线排列、7筒为「上斜三 + 下四方阵」，用字符串标记走专门绘制；
+   *  8筒为两列四行（竖式方阵）。 */
   var DOT_LAYOUT = {
     2: [[1], [1]],
-    3: [[1], [1], [1]],
+    3: 'diag',
     4: [[1, 1], [1, 1]],
     5: [[1, 1], [1], [1, 1]],
     6: [[1, 1, 1], [1, 1, 1]],
-    7: [[1], [1, 1, 1], [1, 1, 1]],
-    8: [[1, 1, 1, 1], [1, 1, 1, 1]],
+    7: 'seven',
+    8: [[1, 1], [1, 1], [1, 1], [1, 1]],
     9: [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
   };
-  var DOT_COLORS = {   // 按填充顺序：b 蓝 r 红 g 绿
-    2: ['g', 'b'], 3: ['b', 'r', 'g'], 4: ['b', 'g', 'g', 'b'],
+  var DOT_COLORS = {   // 按填充顺序：b 蓝 r 红 g 绿（传统蓝红绿三色）
+    2: ['g', 'b'], 4: ['b', 'g', 'g', 'b'],
     5: ['b', 'g', 'r', 'g', 'b'], 6: ['g', 'g', 'g', 'r', 'r', 'r'],
-    7: ['r', 'g', 'g', 'g', 'b', 'b', 'b'], 8: ['b', 'b', 'g', 'g', 'g', 'g', 'b', 'b'],
+    8: ['b', 'g', 'b', 'g', 'b', 'g', 'b', 'g'],
     9: ['g', 'g', 'g', 'r', 'r', 'r', 'b', 'b', 'b']
   };
+  /** 斜排（3筒 / 7筒上半）：蓝-红-绿 */
+  var DIAG_COLORS = ['b', 'r', 'g'];
+  /** 7筒下半 2×2 的配色 */
+  var SEVEN_COLORS = ['g', 'b', 'b', 'g'];
   var BAM_LAYOUT = {
     2: [[1], [1]],
     3: [[1], [1, 1]],
@@ -70,27 +76,28 @@
     8: [[1, 1, 1, 1], [1, 1, 1, 1]],
     9: [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
   };
-  var BAM_COLORS = {   // 竹节以绿为主，传统红点缀
+  var BAM_COLORS = {   // 竹节以绿为主，传统红点缀（五条红心、七条红顶）
     2: ['r', 'g'], 3: ['r', 'g', 'g'], 4: ['g', 'g', 'g', 'g'],
     5: ['g', 'g', 'r', 'g', 'g'], 6: ['g', 'g', 'g', 'g', 'g', 'g'],
     7: ['r', 'g', 'g', 'g', 'g', 'g', 'g'], 8: ['g', 'g', 'g', 'g', 'g', 'g', 'g', 'g'],
     9: ['g', 'g', 'g', 'g', 'g', 'g', 'g', 'g', 'g']
   };
 
-  /** 一条的传统「麻雀」：手绘 SVG（蓝身、红羽、黄喙、栖枝） */
+  /** 一条的传统「麻雀」：手绘 SVG（蓝身、红顶羽、黄喙、栖枝） */
   var BIRD_SVG =
-    '<svg class="bird" viewBox="0 0 40 44" aria-hidden="true">' +
-    '<path d="M14 22 L1 12 Q8 12 14 19 Z" fill="#1e8a4c"/>' +
-    '<path d="M13 25 L0 20 Q7 16 14 22 Z" fill="#2fae6a"/>' +
-    '<path d="M14 19 L4 6 Q11 7 16 16 Z" fill="#c0392b"/>' +
-    '<ellipse cx="21" cy="27" rx="8.5" ry="10.5" fill="#2f80c2"/>' +
-    '<path d="M17 24 Q10 22 8 16 Q16 18 20 23 Z" fill="#1c5d94"/>' +
-    '<circle cx="27" cy="14" r="5.2" fill="#2f80c2"/>' +
-    '<path d="M32 12.5 L38.5 14 L32 15.8 Z" fill="#e8971e"/>' +
-    '<circle cx="28" cy="13" r="1.6" fill="#fff"/>' +
-    '<circle cx="28.4" cy="13.2" r=".8" fill="#222"/>' +
-    '<path d="M20 37.5 V41 M24 37.5 V41" stroke="#e8971e" stroke-width="1.4"/>' +
-    '<path d="M12 41 H30" stroke="#8a5a2b" stroke-width="2" stroke-linecap="round"/>' +
+    '<svg class="bird" viewBox="0 0 44 46" aria-hidden="">' +
+    '<path d="M12 26 L-1 15 Q6 14 12 22 Z" fill="#1e8a4c"/>' +
+    '<path d="M11 29 L-2 24 Q5 20 12 26 Z" fill="#2fae6a"/>' +
+    '<path d="M12 22 L3 8 Q10 9 14 19 Z" fill="#c0392b"/>' +
+    '<ellipse cx="20" cy="31" rx="9" ry="11" fill="#2f80c2"/>' +
+    '<path d="M16 29 Q9 27 7 21 Q15 23 19 28 Z" fill="#1c5d94"/>' +
+    '<circle cx="28" cy="17" r="6" fill="#2f80c2"/>' +
+    '<path d="M27 12 Q28 8 32 9 Q30 12 29 13 Z" fill="#c0392b"/>' +
+    '<path d="M34 15.5 L41.5 17 L34 19 Z" fill="#e8971e"/>' +
+    '<circle cx="29.5" cy="16" r="1.9" fill="#fff"/>' +
+    '<circle cx="30" cy="16.3" r="1" fill="#222"/>' +
+    '<path d="M19 42 V45.5 M24 42 V45.5" stroke="#e8971e" stroke-width="1.5"/>' +
+    '<path d="M11 45.5 H33" stroke="#8a5a2b" stroke-width="2.4" stroke-linecap="round"/>' +
     '</svg>';
 
   function rowsHtml(layout, colors, cls) {
@@ -103,6 +110,19 @@
       h += '</div>';
     });
     return h + '</div>';
+  }
+
+  /** 斜排三子（3筒、7筒上半） */
+  function diagHtml() {
+    return '<div class="rows d3">' + DIAG_COLORS.map(function (c) {
+      return '<div class="row r1"><i class="dot c-' + c + '"></i></div>';
+    }).join('') + '</div>';
+  }
+
+  /** 7筒：上斜三 + 下 2×2 方阵 */
+  function sevenHtml() {
+    return '<div class="g7">' + diagHtml() +
+      rowsHtml([[1, 1], [1, 1]], SEVEN_COLORS, 'dot') + '</div>';
   }
 
   /** 按牌 idx 生成牌面 HTML */
@@ -118,6 +138,8 @@
     if (idx < 27) {
       var m = idx - 18 + 1;                // 点数 1..9
       if (m === 1) return '<div class="d1"></div>';   // 一筒：大同心圆
+      if (m === 3) return diagHtml();
+      if (m === 7) return sevenHtml();
       return rowsHtml(DOT_LAYOUT[m], DOT_COLORS[m], 'dot');
     }
     var h = idx - 27;

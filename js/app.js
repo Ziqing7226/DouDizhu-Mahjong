@@ -47,6 +47,10 @@
     if (mode !== 'ddz' && mode !== 'mj') return;
     Store.setPrefs({ gameMode: mode });
     App.current = mode;
+    // 收起所有抽屉（移动端侧栏）
+    document.querySelectorAll('.sidebar.open').forEach(function (s) {
+      s.classList.remove('open');
+    });
     DOM.gameLobby.classList.remove('show');
     DOM.ddzView.style.display = (mode === 'ddz') ? '' : 'none';
     DOM.mjView.style.display = (mode === 'mj') ? '' : 'none';
@@ -85,6 +89,14 @@
         });
       })(btns[i]);
     }
+
+    // 移动端信息抽屉拉手（两个游戏视图各一个）
+    document.querySelectorAll('.sidebar-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        tab.closest('.sidebar').classList.toggle('open');
+        if (global.Sound) global.Sound.play('select');
+      });
+    });
 
     highlightRooms();
     DOM.gameLobby.classList.add('show');   // 进入页面先选游戏
