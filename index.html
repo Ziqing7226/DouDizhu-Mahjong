@@ -11,7 +11,7 @@
   -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>斗地主</title>
+  <title>斗地主 · 麻将</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -21,7 +21,8 @@
     <!-- ============ 顶栏 ============ -->
     <header class="topbar">
       <div class="brand">
-        <span class="logo">斗地主</span>
+        <button class="lobby-btn" id="btnGameMode" title="返回游戏大厅，切换游戏">🎮 游戏大厅</button>
+        <span class="logo" id="logoText">斗地主</span>
       </div>
       <div class="topbar-right">
         <button class="icon-btn" id="btnMusic" title="背景音乐开关">🎵</button>
@@ -35,8 +36,11 @@
 
     <div class="main">
 
-      <!-- ============ 牌桌 ============ -->
-      <div class="play-area" id="playArea">
+      <!-- ============ 斗地主视图 ============ -->
+      <div class="game-view" id="ddzView">
+
+        <!-- ============ 牌桌 ============ -->
+        <div class="play-area" id="playArea">
 
         <!-- ============ 选场大厅（覆盖牌桌） ============ -->
         <div class="lobby" id="lobby">
@@ -47,17 +51,14 @@
               <button class="room-btn" data-d="easy">
                 <span class="room-icon">🌱</span>
                 <span class="room-name">新手场</span>
-                <span class="room-desc">AI 出牌随意，适合练手熟悉规则</span>
               </button>
               <button class="room-btn" data-d="hard">
                 <span class="room-icon">⚔️</span>
                 <span class="room-name">高手场</span>
-                <span class="room-desc">AI 会记牌推演、配合围堵，来真的</span>
               </button>
               <button class="room-btn" data-d="master">
                 <span class="room-icon">👑</span>
                 <span class="room-name">大师场</span>
-                <span class="room-desc">AI 全知全能，能看穿你的每一条逃牌路线</span>
               </button>
             </div>
             <div class="lobby-note">每局结束后可随时返回这里更换场次</div>
@@ -121,6 +122,105 @@
         </div>
       </aside>
 
+      </div>
+
+      <!-- ============ 麻将视图 ============ -->
+      <div class="game-view" id="mjView" style="display:none">
+
+        <!-- ============ 麻将牌桌 ============ -->
+        <div class="mj-table" id="mjTable">
+
+          <!-- 麻将选场大厅 -->
+          <div class="lobby" id="mjLobby">
+            <div class="lobby-card">
+              <div class="lobby-title">选 择 场 次</div>
+              <div class="lobby-sub">挑选你的牌友，即刻开局</div>
+              <div class="lobby-rooms">
+                <button class="room-btn" data-d="easy">
+                  <span class="room-icon">🌱</span>
+                  <span class="room-name">新手场</span>
+                </button>
+                <button class="room-btn" data-d="hard">
+                  <span class="room-icon">⚔️</span>
+                  <span class="room-name">高手场</span>
+                </button>
+                <button class="room-btn" data-d="master">
+                  <span class="room-icon">👑</span>
+                  <span class="room-name">大师场</span>
+                </button>
+              </div>
+              <div class="lobby-note">每局结束后可随时返回这里更换场次</div>
+            </div>
+          </div>
+
+          <!-- 对手座位：0 我 / 1 右 / 2 上 / 3 左 -->
+          <div class="mj-seat mj-seat-2" id="mjBox-2"></div>
+          <div class="mj-seat mj-seat-1" id="mjBox-1"></div>
+          <div class="mj-seat mj-seat-3" id="mjBox-3"></div>
+
+          <!-- 牌河 -->
+          <div class="mj-river mj-river-2" id="mjRiver-2"></div>
+          <div class="mj-river mj-river-1" id="mjRiver-1"></div>
+          <div class="mj-river mj-river-3" id="mjRiver-3"></div>
+          <div class="mj-river mj-river-0" id="mjRiver-0"></div>
+          <div class="mj-wall-info" id="mjWallInfo">牌墙余 — 张</div>
+
+          <!-- 我的手牌 + 操作 -->
+          <div class="mj-actions">
+            <button class="btn gold" id="mjBtnHu">胡</button>
+            <button class="btn ghost" id="mjBtnGang">杠</button>
+            <button class="btn" id="mjBtnDiscard">打出</button>
+            <button class="btn ghost" id="mjBtnHint">提示</button>
+          </div>
+          <div class="mj-my-row">
+            <div class="mj-seat mj-seat-0" id="mjBox-0"></div>
+            <div class="mj-hand" id="mjHand"></div>
+          </div>
+
+        </div>
+
+        <!-- ============ 麻将侧栏 ============ -->
+        <aside class="sidebar">
+          <div class="panel">
+            <h3>余 牌 器 <span class="sub">未出现的牌</span></h3>
+            <div class="counter-grid mj-counter" id="mjCounterGrid"></div>
+          </div>
+          <div class="panel">
+            <h3>对 局 信 息</h3>
+            <div class="info-list" id="mjInfoList"></div>
+          </div>
+          <div class="panel">
+            <h3>各 家 积 分</h3>
+            <div class="info-list" id="mjScoreList"></div>
+          </div>
+          <div class="panel">
+            <h3>牌 谱</h3>
+            <div class="log-list" id="mjLogList"></div>
+          </div>
+        </aside>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 游戏模式大厅 ============ -->
+  <div class="mode-lobby" id="gameLobby">
+    <div class="lobby-card">
+      <div class="lobby-title">选 择 游 戏</div>
+      <div class="lobby-sub">先挑一款，再去挑对手</div>
+      <div class="lobby-rooms">
+        <button class="room-btn" data-game="ddz">
+          <span class="room-icon">🃏</span>
+          <span class="room-name">斗地主</span>
+          <span class="room-desc">经典三人牌局：叫分抢地主，农民联手对抗地主</span>
+        </button>
+        <button class="room-btn" data-game="mj">
+          <span class="room-icon">🀄</span>
+          <span class="room-name">麻 将</span>
+          <span class="room-desc">标准四人麻将：吃碰杠胡，番种计分，火药味十足</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -148,6 +248,12 @@
   <script src="js/mobile.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/mj/tiles.js"></script>
+  <script src="js/mj/rules.js"></script>
+  <script src="js/mj/ai.js"></script>
+  <script src="js/mj/ui.js"></script>
+  <script src="js/mj/game.js"></script>
+  <script src="js/app.js"></script>
 </body>
 
 </html>

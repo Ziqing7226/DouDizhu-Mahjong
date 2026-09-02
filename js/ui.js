@@ -415,18 +415,20 @@
 
   /**
    * 弹窗关闭通知：closeDialog 及弹窗按钮触发的真实「打开→关闭」转变
-   * 都会回调注册的处理器。按钮路径刻意把通知放在 onClick 之后执行，
+   * 都会回调注册的处理器（各游戏模块各自注册，用 App.current 判断自己是否在场）。
+   * 按钮路径刻意把通知放在 onClick 之后执行，
    * 这样「再来一局」先切回对局阶段，处理器看到 phase 已不是 over，就不会误回大厅。
    */
-  var dialogCloseHandler = null;
-  function setDialogCloseHandler(fn) { dialogCloseHandler = fn; }
+  var dialogCloseHandlers = [];
+  function addDialogCloseHandler(fn) { dialogCloseHandlers.push(fn); }
+  function setDialogCloseHandler(fn) { dialogCloseHandlers = [fn]; }
 
   function overlayShown() { return DOM.overlay.classList.contains('show'); }
 
   function hideOverlay() { DOM.overlay.classList.remove('show'); }
 
   function notifyDialogClosed() {
-    if (dialogCloseHandler) dialogCloseHandler();
+    dialogCloseHandlers.forEach(function (fn) { fn(); });
   }
 
   function showDialog(html, buttons) {
@@ -490,6 +492,7 @@
     toast: toast, bombEffect: bombEffect, springBanner: springBanner,
     floatPanel: floatPanel, closeFloat: closeFloat,
     showDialog: showDialog, closeDialog: closeDialog,
+    addDialogCloseHandler: addDialogCloseHandler,
     setDialogCloseHandler: setDialogCloseHandler,
     showLobby: showLobby, hideLobby: hideLobby,
     setActions: setActions, setHintVisible: setHintVisible

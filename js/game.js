@@ -935,8 +935,14 @@
       Sound.play('select');
     });
 
-    UI.el('btnStats').addEventListener('click', showStats);
-    UI.el('btnHelp').addEventListener('click', showHelp);
+    UI.el('btnStats').addEventListener('click', function () {
+      if (global.App && global.App.current === 'mj') { global.MjGame.showStats(); return; }
+      showStats();
+    });
+    UI.el('btnHelp').addEventListener('click', function () {
+      if (global.App && global.App.current === 'mj') { global.MjGame.showHelp(); return; }
+      showHelp();
+    });
 
     // 选场大厅：点击场次按钮 → 记住难度，立即开局
     var roomBtns = UI.el('lobby').querySelectorAll('button');
@@ -955,7 +961,9 @@
     }
 
     // 对局结束后，只要关掉了所有弹窗（含战绩/规则），就回到选场大厅
-    UI.setDialogCloseHandler(function () {
+    // （仅当当前游戏是斗地主 —— 麻将模块注册了自己的处理器）
+    UI.addDialogCloseHandler(function () {
+      if (global.App && global.App.current !== 'ddz') return;
       if (G.phase === 'over') enterLobby();
     });
 
@@ -973,8 +981,18 @@
       document.removeEventListener('pointerdown', once);
     });
 
-    // 进入游戏先停在选场大厅，等玩家挑好场次再开局
-    enterLobby();
+    // 初始不再自动开局 —— 由 App 的游戏模式大厅接管（选斗地主后调用 enterLobby）
+  }
+
+  /** 切回游戏模式大厅时暂停当前局面 */
+  function suspend() {
+    G.gen++;
+    clearTimer();
+    G.phase = 'lobby';
+    G.thinkingSeat = -1;
+    G.busy = false;
+    UI.hideLobby();
+    UI.closeFloat();
   }
 
   /** 大厅里高亮上次选择的场次 */
@@ -1024,7 +1042,7 @@
     init();
   }
 
-  global.Game = { G: G, newGame: newGame, enterLobby: enterLobby,
+  global.Game = { G: G, newGame: newGame, enterLobby: enterLobby, suspend: suspend,
     hintEnabled: hintEnabled, rollOpponents: rollOpponents,
     handStrength: handStrength, riggedDeck: riggedDeck };
 

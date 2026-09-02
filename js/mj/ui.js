@@ -1,0 +1,345 @@
+/* 斗地主&麻将 · 棋牌合集 —— 纯前端单机游戏
+ * Copyright (C) 2026 Ziqing7226
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * 本程序为自由软件：你可以在 GNU 通用公共许可证第 3 版（或按你的选择，
+ * 任何更高版本，由自由软件基金会发布）条款下重新分发和/或修改它。
+ * 许可证全文见仓库根目录的 LICENSE 文件。
+ */
+
+/* ==========================================================================
+ * mj/ui.js —— 麻将界面渲染与动画
+ * 只负责「把状态画出来」，不做任何规则判断。
+ * 通用控件（toast / 浮层 / 弹窗 / 关闭通知）直接复用全局 UI 模块。
+ * ========================================================================== */
+(function (global) {
+  'use strict';
+
+  var Tiles = global.MjTiles;
+  var G = global.UI;   // 复用 toast / floatPanel / showDialog 等
+
+  function el(id) { return document.getElementById(id); }
+
+  var DOM = {};
+  function bindDom() {
+    ['mjView', 'mjHand', 'mjWallInfo', 'mjInfoList', 'mjScoreList', 'mjLogList',
+      'mjCounterGrid', 'mjLobby',
+      'mjBtnDiscard', 'mjBtnHint', 'mjBtnHu', 'mjBtnGang'
+    ].forEach(function (id) { DOM[id] = el(id); });
+    DOM.boxes = [el('mjBox-0'), el('mjBox-1'), el('mjBox-2'), el('mjBox-3')];
+    DOM.rivers = [el('mjRiver-0'), el('mjRiver-1'), el('mjRiver-2'), el('mjRiver-3')];
+  }
+
+  /* ---------------- 牌元素 ---------------- */
+
+  var SUIT_CLS = { m: 'mj-m', s: 'mj-s', p: 'mj-p', z: 'mj-z' };
+
+  /* ---------- 专业牌面绘制（纯 CSS/SVG，无外部图片） ----------
+   * 万：汉字数 + 红色「萬」（传统万子样式）
+   * 条：竹节棒排列；一条用 SVG 麻雀
+   * 筒：同心圆饼排列（配色按传统蓝/红/绿）
+   * 字：東南西北（黑）·中（红）·發（绿）·白（蓝框空板）          */
+
+  var NUM_CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  var HONOR_FACE = ['東', '南', '西', '北', '中', '發', ''];
+
+  /** 各点数的行排列（1 = 一枚），列出的从 2 起；1 特判 */
+  var DOT_LAYOUT = {
+    2: [[1], [1]],
+    3: [[1], [1], [1]],
+    4: [[1, 1], [1, 1]],
+    5: [[1, 1], [1], [1, 1]],
+    6: [[1, 1, 1], [1, 1, 1]],
+    7: [[1], [1, 1, 1], [1, 1, 1]],
+    8: [[1, 1, 1, 1], [1, 1, 1, 1]],
+    9: [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
+  };
+  var DOT_COLORS = {   // 按填充顺序：b 蓝 r 红 g 绿
+    2: ['g', 'b'], 3: ['b', 'r', 'g'], 4: ['b', 'g', 'g', 'b'],
+    5: ['b', 'g', 'r', 'g', 'b'], 6: ['g', 'g', 'g', 'r', 'r', 'r'],
+    7: ['r', 'g', 'g', 'g', 'b', 'b', 'b'], 8: ['b', 'b', 'g', 'g', 'g', 'g', 'b', 'b'],
+    9: ['g', 'g', 'g', 'r', 'r', 'r', 'b', 'b', 'b']
+  };
+  var BAM_LAYOUT = {
+    2: [[1], [1]],
+    3: [[1], [1, 1]],
+    4: [[1, 1], [1, 1]],
+    5: [[1, 1], [1], [1, 1]],
+    6: [[1, 1, 1], [1, 1, 1]],
+    7: [[1], [1, 1, 1], [1, 1, 1]],
+    8: [[1, 1, 1, 1], [1, 1, 1, 1]],
+    9: [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
+  };
+  var BAM_COLORS = {   // 竹节以绿为主，传统红点缀
+    2: ['r', 'g'], 3: ['r', 'g', 'g'], 4: ['g', 'g', 'g', 'g'],
+    5: ['g', 'g', 'r', 'g', 'g'], 6: ['g', 'g', 'g', 'g', 'g', 'g'],
+    7: ['r', 'g', 'g', 'g', 'g', 'g', 'g'], 8: ['g', 'g', 'g', 'g', 'g', 'g', 'g', 'g'],
+    9: ['g', 'g', 'g', 'g', 'g', 'g', 'g', 'g', 'g']
+  };
+
+  /** 一条的传统「麻雀」：手绘 SVG（蓝身、红羽、黄喙、栖枝） */
+  var BIRD_SVG =
+    '<svg class="bird" viewBox="0 0 40 44" aria-hidden="true">' +
+    '<path d="M14 22 L1 12 Q8 12 14 19 Z" fill="#1e8a4c"/>' +
+    '<path d="M13 25 L0 20 Q7 16 14 22 Z" fill="#2fae6a"/>' +
+    '<path d="M14 19 L4 6 Q11 7 16 16 Z" fill="#c0392b"/>' +
+    '<ellipse cx="21" cy="27" rx="8.5" ry="10.5" fill="#2f80c2"/>' +
+    '<path d="M17 24 Q10 22 8 16 Q16 18 20 23 Z" fill="#1c5d94"/>' +
+    '<circle cx="27" cy="14" r="5.2" fill="#2f80c2"/>' +
+    '<path d="M32 12.5 L38.5 14 L32 15.8 Z" fill="#e8971e"/>' +
+    '<circle cx="28" cy="13" r="1.6" fill="#fff"/>' +
+    '<circle cx="28.4" cy="13.2" r=".8" fill="#222"/>' +
+    '<path d="M20 37.5 V41 M24 37.5 V41" stroke="#e8971e" stroke-width="1.4"/>' +
+    '<path d="M12 41 H30" stroke="#8a5a2b" stroke-width="2" stroke-linecap="round"/>' +
+    '</svg>';
+
+  function rowsHtml(layout, colors, cls) {
+    var h = '<div class="rows">', k = 0;
+    layout.forEach(function (row) {
+      h += '<div class="row r' + row.length + '">';
+      row.forEach(function (n) {
+        if (n) h += '<i class="' + cls + ' c-' + (colors ? colors[k++] : 'g') + '"></i>';
+      });
+      h += '</div>';
+    });
+    return h + '</div>';
+  }
+
+  /** 按牌 idx 生成牌面 HTML */
+  function faceHtml(idx) {
+    if (idx < 9) {
+      return '<span class="wn">' + NUM_CN[idx] + '</span><span class="ww">萬</span>';
+    }
+    if (idx < 18) {
+      var n = idx - 9 + 1;                 // 点数 1..9
+      if (n === 1) return BIRD_SVG;
+      return rowsHtml(BAM_LAYOUT[n], BAM_COLORS[n], 'st');
+    }
+    if (idx < 27) {
+      var m = idx - 18 + 1;                // 点数 1..9
+      if (m === 1) return '<div class="d1"></div>';   // 一筒：大同心圆
+      return rowsHtml(DOT_LAYOUT[m], DOT_COLORS[m], 'dot');
+    }
+    var h = idx - 27;
+    if (h === 6) return '<span class="bai"></span>';  // 白板
+    return '<span class="hon' + (h === 4 ? ' hr' : (h === 5 ? ' hg' : '')) + '">' +
+      HONOR_FACE[h] + '</span>';
+  }
+
+  function tileEl(tile, extraCls) {
+    var d = document.createElement('div');
+    var idx = (typeof tile === 'number') ? tile : tile.idx;
+    var cls = 'mtile ' + SUIT_CLS[Tiles.suitOf(idx)];
+    if (extraCls) cls += ' ' + extraCls;
+    d.className = cls;
+    d.dataset.idx = idx;
+    if (typeof tile === 'object') d.dataset.id = tile.id;
+    d.innerHTML = faceHtml(idx);
+    return d;
+  }
+
+  /** 把一组 idx 渲染成小牌面 HTML 字符串（结算亮牌等场景用） */
+  function tilesHtml(idxs, extraCls) {
+    return (idxs || []).map(function (i) {
+      return '<div class="mtile mini ' + SUIT_CLS[Tiles.suitOf(i)] +
+        (extraCls ? ' ' + extraCls : '') + '">' + faceHtml(i) + '</div>';
+    }).join('');
+  }
+
+  function backEl() {
+    var d = document.createElement('div');
+    d.className = 'mtile back';
+    return d;
+  }
+
+  /* ---------------- 座位信息框 ---------------- */
+
+  var WIND = ['东', '南', '西', '北'];
+
+  function renderSeat(seat, p, state) {
+    var box = DOM.boxes[seat];
+    if (!box) return;
+    var isActive = state && state.activeSeat === seat;
+    var isThinking = state && state.thinkingSeat === seat;
+    var wind = WIND[(seat - (state ? state.dealer : 0) + 4) % 4];   // 相对庄家的风位显示
+
+    box.className = 'mj-seat mj-seat-' + seat +
+      (isActive ? ' active' : '') + (isThinking ? ' think' : '');
+    box.innerHTML =
+      '<div class="avatar">' + p.avatar + '</div>' +
+      '<div class="p-info">' +
+      '<div class="p-name">' + p.name +
+      (state && state.dealer === seat ? ' <span class="dealer-tag">庄</span>' : '') +
+      '</div>' +
+      '<div class="p-meta">' + wind + '位 · 剩 <b>' + p.hand.length + '</b> 张</div>' +
+      '</div>' + meldsHtml(p.melds);
+  }
+
+  function meldsHtml(melds) {
+    if (!melds || !melds.length) return '';
+    var h = '<div class="mj-melds">';
+    melds.forEach(function (m) {
+      h += '<div class="mj-meld ' + m.type + '">';
+      m.tiles.forEach(function (idx) {
+        h += '<div class="mtile mini ' + SUIT_CLS[Tiles.suitOf(idx)] + '">' + faceHtml(idx) + '</div>';
+      });
+      h += '</div>';
+    });
+    return h + '</div>';
+  }
+
+  /* ---------------- 手牌 ---------------- */
+
+  var onTileClick = null;
+  function setTileClickHandler(fn) { onTileClick = fn; }
+
+  function renderHand(tiles, selectedId, interactive) {
+    DOM.mjHand.innerHTML = '';
+    DOM.mjHand.className = 'mj-hand' + (interactive ? '' : ' disabled');
+    tiles.forEach(function (t) {
+      var d = tileEl(t, t.id === selectedId ? 'selected' : '');
+      if (interactive && onTileClick) {
+        d.addEventListener('click', function () { onTileClick(t, d); });
+      }
+      DOM.mjHand.appendChild(d);
+    });
+  }
+
+  function dealAnimation() {
+    var kids = DOM.mjHand.children;
+    for (var i = 0; i < kids.length; i++) {
+      kids[i].style.animationDelay = (i * 24) + 'ms';
+      kids[i].classList.add('dealing');
+    }
+  }
+
+  /* ---------------- 牌河 / 牌墙 ---------------- */
+
+  function renderRiver(seat, tiles, lastId) {
+    var w = DOM.rivers[seat];
+    if (!w) return;
+    w.innerHTML = '';
+    // 牌河只展示最近 20 张（5×4），避免遮挡其他区域
+    tiles.slice(-20).forEach(function (t) {
+      var d = tileEl(t, t.id === lastId ? 'last' : '');
+      w.appendChild(d);
+    });
+  }
+
+  function renderWall(n) {
+    DOM.mjWallInfo.textContent = '牌墙余 ' + n + ' 张';
+  }
+
+  /* ---------------- 气泡 ---------------- */
+
+  function bubble(seat, text, cls) {
+    var box = DOM.boxes[seat];
+    if (!box) return;
+    var old = box.querySelector('.mj-bubble');
+    if (old) old.remove();
+    var b = document.createElement('div');
+    b.className = 'mj-bubble ' + (cls || '');
+    b.textContent = text;
+    box.appendChild(b);
+    setTimeout(function () { b.remove(); }, 1600);
+  }
+
+  function clearBubbles() {
+    DOM.boxes.forEach(function (box) {
+      if (!box) return;
+      var old = box.querySelector('.mj-bubble');
+      if (old) old.remove();
+    });
+  }
+
+  /* ---------------- 侧栏 ---------------- */
+
+  /** 余牌器：34 种牌各剩几张（不可见的 = 4 − 我的暗牌 − 牌河 − 副露明牌） */
+  var COUNTER_ORDER = (function () {
+    var arr = [];
+    for (var i = 0; i < 34; i++) arr.push(i);
+    return arr;
+  })();
+
+  function renderCounter(unseen) {
+    var html = '';
+    COUNTER_ORDER.forEach(function (i) {
+      var n = unseen[i];
+      var honor = i >= 27;
+      html += '<div class="counter-cell' + (n === 0 ? ' gone' : '') + (honor ? ' joker' : '') + '">' +
+        '<div class="rk">' + (honor ? Tiles.HONOR_SHORT[i - 27]
+          : (i % 9 + 1) + Tiles.SUIT_NAME[Tiles.suitOf(i)]) + '</div>' +
+        '<div class="ct">' + n + '</div></div>';
+    });
+    DOM.mjCounterGrid.innerHTML = html;
+  }
+
+  function renderInfo(rows) {
+    DOM.mjInfoList.innerHTML = rows.map(function (r) {
+      return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>';
+    }).join('');
+  }
+
+  function renderScore(rows) {
+    DOM.mjScoreList.innerHTML = rows.map(function (r) {
+      var cls = r[1] > 0 ? 'plus' : (r[1] < 0 ? 'minus' : '');
+      return '<div class="row"><span>' + r[0] + '</span><b class="' + cls + '">' +
+        (r[1] > 0 ? '+' : '') + r[1] + '</b></div>';
+    }).join('');
+  }
+
+  function renderLogs(logs) {
+    DOM.mjLogList.innerHTML = logs.slice(-14).map(function (l) {
+      return '<div class="' + (l.me ? 'me' : '') + '">' + l.text + '</div>';
+    }).join('');
+  }
+
+  /* ---------------- 操作按钮 ---------------- */
+
+  function setActions(cfg) {
+    var map = {
+      mjBtnDiscard: cfg.discard, mjBtnHint: cfg.hint,
+      mjBtnHu: cfg.hu, mjBtnGang: cfg.gang
+    };
+    Object.keys(map).forEach(function (id) {
+      var b = DOM[id];
+      if (!b) return;
+      b.disabled = !map[id];
+    });
+  }
+
+  /** 大师档隐藏提示按钮 */
+  function setHintVisible(visible) {
+    DOM.mjBtnHint.style.display = visible ? '' : 'none';
+  }
+
+  /* ---------------- 选场大厅 ---------------- */
+
+  function showLobby() { DOM.mjLobby.classList.add('show'); }
+  function hideLobby() { DOM.mjLobby.classList.remove('show'); }
+
+  function highlightRooms(diff) {
+    var btns = DOM.mjLobby.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('last', btns[i].dataset.d === diff);
+    }
+  }
+
+  global.MjUI = {
+    bindDom: bindDom, DOM: DOM, el: el,
+    tileEl: tileEl, tilesHtml: tilesHtml, backEl: backEl,
+    faceHtml: faceHtml,
+    renderSeat: renderSeat, renderHand: renderHand, dealAnimation: dealAnimation,
+    setTileClickHandler: setTileClickHandler,
+    renderRiver: renderRiver, renderWall: renderWall,
+    bubble: bubble, clearBubbles: clearBubbles,
+    renderCounter: renderCounter, renderInfo: renderInfo,
+    renderScore: renderScore, renderLogs: renderLogs,
+    setActions: setActions, setHintVisible: setHintVisible,
+    showLobby: showLobby, hideLobby: hideLobby, highlightRooms: highlightRooms,
+    G: G
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = global.MjUI;
+
+})(typeof window !== 'undefined' ? window : globalThis);

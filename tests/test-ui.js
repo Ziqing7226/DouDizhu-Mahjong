@@ -22,7 +22,9 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const JS_FILES = ['cards.js', 'decompose.js', 'ai.js', 'audio.js', 'music.js', 'voice.js', 'storage.js', 'mobile.js', 'ui.js', 'game.js'];
+const JS_FILES = ['cards.js', 'decompose.js', 'ai.js', 'audio.js', 'music.js', 'voice.js',
+  'storage.js', 'mobile.js', 'ui.js', 'game.js',
+  'mj/tiles.js', 'mj/rules.js', 'mj/ai.js', 'mj/ui.js', 'mj/game.js', 'app.js'];
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -511,7 +513,22 @@ function playOneGame(maxFlush) {
 // 允许每局最多 4000 次调度
 const GAMES = Number(process.env.GAMES || (process.argv.includes('--full') ? 40 : 15));
 
-// 进入游戏先停在选场大厅，点「高手场」开启首局
+// 进入页面先选游戏：斗地主
+const modeLobby = registry.gameLobby;
+ok(!!modeLobby && modeLobby.classList.contains('show'), '进入页面应先显示游戏模式大厅');
+const modeBtns = modeLobby.querySelectorAll('button');
+ok(modeBtns.length === 2, '游戏大厅应有 2 个游戏按钮，实际 ' + modeBtns.length);
+const ddzModeBtn = modeBtns.find(b => b.dataset.game === 'ddz');
+const mjModeBtn = modeBtns.find(b => b.dataset.game === 'mj');
+ok(!!ddzModeBtn && !!mjModeBtn, '游戏大厅按钮 data-game 不全');
+ok(ddzModeBtn._h && ddzModeBtn._h.click, '游戏按钮未绑定点击事件');
+click(ddzModeBtn);
+ok(!modeLobby.classList.contains('show'), '选择游戏后模式大厅应关闭');
+ok(registry.ddzView.style.display !== 'none', '选择斗地主后应显示斗地主视图');
+ok(registry.mjView.style.display === 'none', '选择斗地主时麻将视图应隐藏');
+ok(ctx.App.current === 'ddz', 'App.current 应为 ddz');
+
+// 选场大厅：点「高手场」开启首局
 const lobbyEl = registry.lobby;
 ok(!!lobbyEl && lobbyEl.classList.contains('show'), '首局开始前应停在选场大厅');
 const firstRoom = lobbyEl && lobbyEl.querySelectorAll('button').find(b => b.dataset.d === 'hard');
@@ -574,6 +591,78 @@ ok(rematchNamesKept, '「再来一局」后对手名字应保持不变');
     '换场后对手应使用新抽取的网名');
   ok(G.players[1].name !== '小豆' && G.players[2].name !== '阿欢', '不应再出现旧的写死网名');
   flushOne();
+}
+
+/* ============================================================
+ * 6.5 麻将：模式切换 + 完整一局冒烟
+ * ============================================================ */
+console.log('\n=== 麻将冒烟 ===');
+{
+  // 左上角 🎮 → 游戏模式大厅
+  click(registry.btnGameMode);
+  ok(modeLobby.classList.contains('show'), '点 🎮 应回到游戏模式大厅');
+  ok(G.phase === 'lobby', '切走后斗地主应挂起，实际 ' + G.phase);
+
+  // 选麻将
+  click(mjModeBtn);
+  ok(registry.mjView.style.display !== 'none', '选择麻将后应显示麻将视图');
+  ok(registry.ddzView.style.display === 'none', '选择麻将时斗地主视图应隐藏');
+  ok(ctx.App.current === 'mj', 'App.current 应为 mj');
+  const mjLobbyEl = registry.mjLobby;
+  ok(mjLobbyEl.classList.contains('show'), '进入麻将应先显示麻将选场大厅');
+  const G2 = ctx.MjGame.G;
+  ok(G2.phase === 'lobby', '麻将初始应为 lobby，实际 ' + G2.phase);
+
+  // 选新手场开局
+  const mjRoom = mjLobbyEl.querySelectorAll('button').find(b => b.dataset.d === 'easy');
+  ok(!!mjRoom, '麻将大厅缺少新手场按钮');
+  click(mjRoom);
+  ok(G2.phase === 'playing', '麻将选场后应进入对局，实际 ' + G2.phase);
+  ok(G2.players.length === 4 && G2.players.every(p => p.hand.length === 13),
+    '麻将发牌应为 4 家各 13 张');
+  ok(G2.wall.length === 84, `发牌后牌墙应为 84 张，实际 ${G2.wall.length}`);
+  ok(G2.dealer >= 0 && G2.dealer <= 3, '庄家座位非法: ' + G2.dealer);
+
+  // 驱动完整一局：玩家永远打最后一张，争抢一律过
+  let mjSteps = 0, mjDone = false;
+  while (mjSteps++ < 8000) {
+    if (G2.phase === 'over') { mjDone = true; break; }
+    const my = G2.players[0];
+    if (G2.phase === 'playing' && G2.turn === 0 && !G2.busy && my.hand.length % 3 === 2) {
+      const hand = registry.mjHand;
+      const n = hand.children.length;
+      if (n > 0 && hand.children[n - 1]._h && hand.children[n - 1]._h.click) {
+        hand.children[n - 1]._h.click({});
+        const disc = registry.mjBtnDiscard;
+        if (!disc.disabled && disc._h && disc._h.click) { disc._h.click({}); continue; }
+      }
+    }
+    const layer = registry.floatLayer;
+    if (layer && layer.children.length) {
+      const btns = layer.children[0].querySelectorAll('.btn').filter(b => !b.disabled);
+      const guo = btns.find(b => b.textContent === '过');
+      if (guo) { click(guo); continue; }
+    }
+    if (!flushOne()) break;
+  }
+  ok(mjDone, '麻将一局应能跑到终局（步数耗尽 phase=' + G2.phase +
+    ' wall=' + G2.wall.length + ' hands=' + G2.players.map(p => p.hand.length).join(',') + '）');
+  ok(G2.phase === 'over', '麻将终局阶段应为 over，实际 ' + G2.phase);
+  ok(registry.overlay.classList.contains('show'), '麻将终局应弹出结算面板');
+  const mjSwap = registry.dialog.querySelectorAll('.btn').find(b => b.textContent === '换个场次');
+  ok(!!mjSwap, '麻将结算面板缺少「换个场次」按钮');
+  click(mjSwap);
+  ok(registry.mjLobby.classList.contains('show'), '麻将「换个场次」应回到麻将选场大厅');
+  ok(!registry.overlay.classList.contains('show'), '麻将回大厅后弹窗应关闭');
+
+  // 切回斗地主
+  click(registry.btnGameMode);
+  ok(modeLobby.classList.contains('show'), '再次点 🎮 应回到游戏模式大厅');
+  click(ddzModeBtn);
+  ok(ctx.App.current === 'ddz', '切回后 App.current 应为 ddz');
+  ok(registry.lobby.classList.contains('show'), '切回斗地主应显示其选场大厅');
+  ok(registry.mjView.style.display === 'none', '切回斗地主后麻将视图应隐藏');
+  ok(G2.phase === 'lobby', '切走后麻将应挂起，实际 ' + G2.phase);
 }
 
 ok(!gameErr, '对局流程错误: ' + gameErr);
