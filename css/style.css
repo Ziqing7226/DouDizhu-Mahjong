@@ -48,6 +48,55 @@ body {
   -webkit-user-select: none;
 }
 
+/* ---------------- 移动端 ---------------- */
+
+/* 触屏去点按高亮、去双击缩放延迟 */
+.is-mobile {
+  -webkit-tap-highlight-color: transparent;
+}
+.is-mobile .btn,
+.is-mobile .icon-btn,
+.is-mobile .room-btn,
+.is-mobile .hand .card {
+  touch-action: manipulation;
+}
+
+/* 竖屏提示层：仅移动端竖屏时出现 */
+.rotate-hint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: linear-gradient(160deg, var(--red) 0%, var(--red-dk) 55%, #4a0b08 100%);
+  text-align: center;
+}
+.is-mobile.portrait .rotate-hint { display: flex; }
+
+.rotate-hint .rh-icon {
+  font-size: 64px;
+  animation: rhSpin 2.2s ease-in-out infinite;
+}
+.rotate-hint .rh-text {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #ffe9b8;
+}
+.rotate-hint .rh-sub {
+  font-size: 13px;
+  color: #d8c8a8;
+  opacity: .8;
+  letter-spacing: 2px;
+}
+@keyframes rhSpin {
+  0%, 22% { transform: rotate(0); }
+  55%, 100% { transform: rotate(90deg); }
+}
+
 /* ---------------- 整体布局 ---------------- */
 
 #app {

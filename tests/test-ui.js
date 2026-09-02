@@ -22,7 +22,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const JS_FILES = ['cards.js', 'decompose.js', 'ai.js', 'audio.js', 'music.js', 'voice.js', 'storage.js', 'ui.js', 'game.js'];
+const JS_FILES = ['cards.js', 'decompose.js', 'ai.js', 'audio.js', 'music.js', 'voice.js', 'storage.js', 'mobile.js', 'ui.js', 'game.js'];
 
 let pass = 0, fail = 0;
 const failures = [];
