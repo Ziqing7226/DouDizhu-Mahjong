@@ -106,8 +106,17 @@
       </div>
 
       <!-- ============ 侧栏 ============ -->
+      <button class="sidebar-tab pulse" data-side="#ddzView .sidebar" title="展开 / 收起信息面板">📋<i>记牌器</i></button>
       <aside class="sidebar">
-        <button class="sidebar-tab" title="展开 / 收起信息面板">📋</button>
+        <div class="panel voice-panel">
+          <h3>语 音 播 报</h3>
+          <div class="seg voice-seg">
+            <button data-ve="auto">自动</button>
+            <button data-ve="tts">真人</button>
+            <button data-ve="mespeak">合成</button>
+            <button data-ve="sfx">音效</button>
+          </div>
+        </div>
         <div class="panel">
           <h3>记 牌 器 <span class="sub">未出现的牌</span></h3>
           <div class="counter-grid" id="counterGrid"></div>
@@ -182,8 +191,17 @@
         </div>
 
         <!-- ============ 麻将侧栏 ============ -->
+        <button class="sidebar-tab pulse" data-side="#mjView .sidebar" title="展开 / 收起信息面板">📋<i>余牌器</i></button>
         <aside class="sidebar">
-          <button class="sidebar-tab" title="展开 / 收起信息面板">📋</button>
+          <div class="panel voice-panel">
+            <h3>语 音 播 报</h3>
+            <div class="seg voice-seg">
+              <button data-ve="auto">自动</button>
+              <button data-ve="tts">真人</button>
+              <button data-ve="mespeak">合成</button>
+              <button data-ve="sfx">音效</button>
+            </div>
+          </div>
           <div class="panel">
             <h3>余 牌 器 <span class="sub">未出现的牌</span></h3>
             <div class="counter-grid mj-counter" id="mjCounterGrid"></div>

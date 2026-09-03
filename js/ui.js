@@ -36,6 +36,17 @@
       1: document.querySelector('.play-slot[data-seat="1"]'),
       2: document.querySelector('.play-slot[data-seat="2"]')
     };
+    // 手机端：点座位框展开/收起玩家信息（事件委托，重渲染不丢）
+    if (document.addEventListener) {
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        var box = t && t.closest ? t.closest('.player-box') : null;
+        if (!box) return;
+        for (var s = 0; s < DOM.boxes.length; s++) {
+          if (DOM.boxes[s] === box) { toggleSeatExpand(s); return; }
+        }
+      });
+    }
   }
 
   /* ---------------- 卡牌元素 ---------------- */
@@ -83,18 +94,27 @@
 
   /* ---------------- 玩家信息框 ---------------- */
 
+  /* 手机端座位默认折叠成头像+张数角标，点按临时展开（4 秒后自动收起），
+   * 避免信息框过大遮挡牌区（参考主流手游牌桌的做法） */
+  var seatExpandUntil = {};
+  var lastBoxArgs = {};
+
   function renderBox(seat, p, state) {
     var box = DOM.boxes[seat];
     if (!box) return;
+    lastBoxArgs[seat] = [p, state];
     var roleCls = p.role === 'landlord' ? 'role-landlord' : (p.role ? 'role-farmer' : '');
     var roleText = p.role === 'landlord' ? '地主' : (p.role === 'farmer' ? '农民' : '');
     var isActive = (state && state.activeSeat === seat);
     var isThinking = (state && state.thinkingSeat === seat);
+    var expanded = !!seatExpandUntil[seat] && seatExpandUntil[seat] > Date.now();
 
-    box.className = 'player-box' + (isActive ? ' active' : '') + (isThinking ? ' think' : '');
+    box.className = 'player-box' + (expanded ? ' expanded' : '') +
+      (isActive ? ' active' : '') + (isThinking ? ' think' : '');
     box.innerHTML =
       '<div class="avatar">' + p.avatar +
       (roleText ? '<span class="role-tag ' + roleCls + '">' + roleText + '</span>' : '') +
+      '<span class="cnt-badge">' + p.hand.length + '</span>' +
       '</div>' +
       '<div class="p-info">' +
       '<div class="p-name">' + p.name + '</div>' +
@@ -105,6 +125,22 @@
       '</div>';
 
     if (seat !== 0) box.appendChild(miniBacks(p.hand.length));
+  }
+
+  function toggleSeatExpand(seat) {
+    if (seatExpandUntil[seat]) delete seatExpandUntil[seat];
+    else seatExpandUntil[seat] = Date.now() + 4000;
+    var args = lastBoxArgs[seat];
+    if (args) renderBox(seat, args[0], args[1]);
+    if (seatExpandUntil[seat]) {
+      setTimeout(function () {
+        if (seatExpandUntil[seat] && seatExpandUntil[seat] <= Date.now()) {
+          delete seatExpandUntil[seat];
+          var a = lastBoxArgs[seat];
+          if (a) renderBox(seat, a[0], a[1]);
+        }
+      }, 4200);
+    }
   }
 
   /* ---------------- 手牌 ---------------- */

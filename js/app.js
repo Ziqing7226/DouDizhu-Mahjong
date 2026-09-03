@@ -39,6 +39,12 @@
     if (App.current === 'mj' && global.MjGame) global.MjGame.suspend();
     App.current = null;
     UI.closeDialog();
+    document.querySelectorAll('.sidebar.open').forEach(function (s) {
+      s.classList.remove('open');
+    });
+    document.querySelectorAll('.game-view.drawer-open').forEach(function (v) {
+      v.classList.remove('drawer-open');
+    });
     highlightRooms();
     DOM.gameLobby.classList.add('show');
   };
@@ -51,6 +57,9 @@
     // 收起所有抽屉（移动端侧栏）
     document.querySelectorAll('.sidebar.open').forEach(function (s) {
       s.classList.remove('open');
+    });
+    document.querySelectorAll('.game-view.drawer-open').forEach(function (v) {
+      v.classList.remove('drawer-open');
     });
     DOM.gameLobby.classList.remove('show');
     DOM.ddzView.style.display = (mode === 'ddz') ? '' : 'none';
@@ -123,6 +132,81 @@
     DOM.btnFullscreen.classList.toggle('off', !!fsElement());
   }
 
+  /* ---------------- 温馨提醒（健康休息） ---------------- */
+
+  /**
+   * 「记忆时刻」：刚进入游戏时记住当下；每逢开局前检查，
+   * 距上次记忆超过 30 分钟则在结算面板之后、开局之前弹出休息提醒，
+   * 用户确认「休息完毕」后放行，并在这次开局重新记忆时刻。
+   */
+  var Health = {
+    stamp: Date.now(),
+    LIMIT: 30 * 60 * 1000,
+    remember: function () { this.stamp = Date.now(); },
+    overdue: function () { return Date.now() - this.stamp > this.LIMIT; },
+    /**
+     * 开局闸门：超时则弹提醒并拦截本次开局；确认后重新记忆并执行 cb()。
+     * 返回 true 表示已被拦截。
+     */
+    gate: function (cb) {
+      if (!this.overdue()) return false;
+      var self = this;
+      UI.showDialog(
+        '<h2>温馨提醒</h2>' +
+        '<div class="sec"><p style="text-align:center;font-size:15px;">你已经连续游玩超过半小时啦～</p></div>' +
+        '<div class="sec"><p>长时间盯着屏幕容易疲劳。建议放下手机，' +
+        '<b>看看远处放松眼睛，站起来活动一下身体</b>，喝口水，再回来继续愉快的牌局！</p></div>',
+        [{
+          text: '休息完毕，继续游戏', cls: 'gold',
+          onClick: function () { self.remember(); if (cb) cb(); }
+        }]
+      );
+      if (global.Sound) global.Sound.play('spring');
+      return true;
+    }
+  };
+  App.Health = Health;
+  global.Health = Health;   // 供各游戏 newGame 的开局闸门使用
+
+  /* ---------------- 语音引擎选择（侧栏面板） ---------------- */
+
+  function bindVoiceSeg() {
+    var btns = document.querySelectorAll('.voice-seg button');
+    var sync = function () {
+      var cur = Store.getPrefs().voiceEngine || 'auto';
+      btns.forEach(function (b) {
+        b.classList.toggle('on', b.dataset.ve === cur);
+      });
+    };
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        Store.setPrefs({ voiceEngine: b.dataset.ve });
+        if (global.Voice) global.Voice.setPreferredEngine(b.dataset.ve);
+        sync();
+        if (global.Sound) global.Sound.play('select');
+        if (global.UI) UI.toast('语音引擎：' + b.textContent);
+      });
+    });
+    sync();
+  }
+
+  /* ---------------- 信息抽屉（移动端） ---------------- */
+
+  function bindDrawers() {
+    var tabs = document.querySelectorAll('.sidebar-tab');
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var view = tab.closest('.game-view');
+        var sidebar = document.querySelector(tab.dataset.side);
+        var open = !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', open);
+        view.classList.toggle('drawer-open', open);
+        tab.classList.remove('pulse');          // 打开过一次就不再脉冲提醒
+        if (global.Sound) global.Sound.play('select');
+      });
+    });
+  }
+
   function init() {
     bindDom();
 
@@ -145,12 +229,14 @@
     }
 
     // 移动端信息抽屉拉手（两个游戏视图各一个）
-    document.querySelectorAll('.sidebar-tab').forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        tab.closest('.sidebar').classList.toggle('open');
-        if (global.Sound) global.Sound.play('select');
-      });
-    });
+    bindDrawers();
+
+    // 语音引擎选择（侧栏面板），应用上次偏好
+    bindVoiceSeg();
+    if (global.Voice) global.Voice.setPreferredEngine(Store.getPrefs().voiceEngine || 'auto');
+
+    // 温馨提醒：进入游戏即记下「记忆时刻」
+    Health.remember();
 
     // 全屏：顶栏按钮 + 移动端建议条
     DOM.btnFullscreen.addEventListener('click', function () {

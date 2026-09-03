@@ -32,9 +32,34 @@
 
   /* 引擎状态：'tts' → 'mespeak' → 'sfx'（逐层降级，最终稳定） */
   var engine = ttsSupported ? 'tts' : 'boot';
+  var preferred = 'auto';        // auto | tts | mespeak | sfx（用户可切换，持久化）
   var ttsVoicesReady = false;    // 系统 TTS 是否确认有可用音色
   var mespeakState = 'idle';     // idle | loading | ready | failed
   var mespeakProbing = false;
+
+  /** 用户指定引擎（自动 = 按 TTS 可用性逐层兜底；其余锁定该层） */
+  function setPreferredEngine(mode) {
+    if (['auto', 'tts', 'mespeak', 'sfx'].indexOf(mode) < 0) return;
+    preferred = mode;
+    applyPreferred();
+  }
+
+  function applyPreferred() {
+    if (preferred === 'sfx') { engine = 'sfx'; return; }
+    if (preferred === 'tts') {
+      engine = (ttsSupported && ttsVoicesReady) ? 'tts' : 'sfx';
+      return;
+    }
+    if (preferred === 'mespeak') {
+      if (mespeakState === 'ready') { engine = 'mespeak'; return; }
+      engine = 'boot';
+      escalate();
+      return;
+    }
+    // auto：系统 TTS 可用就用，否则逐层兜底
+    if (ttsSupported && ttsVoicesReady) { engine = 'tts'; return; }
+    escalate();
+  }
 
   /* ---- 音色挑选：各家引擎的中文音色命名不统一，按名字猜男女 ---- */
   var MALE_RE = /yunxi|yunjian|yunyang|yunye|kangkang|liang|male|男声|康康|云健|云希|云扬/i;
@@ -134,8 +159,10 @@
   var MS_FILES = ['mespeak.js', 'mespeak-core.js', 'mespeak_config.json', 'mespeak-zh.json'];
 
   function escalate() {
-    if (engine === 'mespeak' || engine === 'sfx') return;
-    if (mespeakState !== 'idle' && mespeakState !== 'failed') return;
+    // 已就绪直接启用；加载中就等它（poll 由首次加载驱动）
+    if (mespeakState === 'ready') { engine = 'mespeak'; return; }
+    if (mespeakState === 'loading') { engine = 'boot'; return; }
+    if (engine === 'sfx' && mespeakState === 'failed') return;   // 试过且失败，留在音效层
     mespeakState = 'loading';
     loadScript(MS_BASE + 'mespeak.js', function (ok) {
       if (!ok) return mespeakFail();
@@ -189,12 +216,16 @@
 
   function mespeakSpeak(text, gender, excitement) {
     try {
-      global.meSpeak.speak(text, {
+      // 清洗文本：全角标点/空白会被合成引擎念成杂音，全部去掉
+      var clean = String(text).replace(/[！!？?，,。.～~、：:；;「」()\[\]（）\s]+/g, '');
+      if (!clean) return;
+      global.meSpeak.speak(clean, {
         voice: 'zh',
-        amplitude: 170 + (excitement ? 30 : 0),
-        pitch: gender === 'male' ? 32 : 58,
-        speed: 168,
-        wordgap: 2
+        amplitude: 175,
+        // 男声压低音高，女声略高；语速稍慢更清楚（eSpeak 中文按字读音）
+        pitch: gender === 'male' ? 30 : 56,
+        speed: 152,
+        wordgap: 1
       });
     } catch (e) { /* 忽略 */ }
   }
@@ -242,6 +273,10 @@
 
   function speak(text, gender, excitement, cue) {
     if (!enabled || !text) return;
+    if (preferred === 'tts' && !(ttsSupported && ttsVoicesReady)) {
+      cueFor(text, gender, cue);   // 指定真人但没有引擎 → 音效
+      return;
+    }
     if (engine === 'tts') {
       if (ttsVoicesReady) ttsSpeak(text, gender, excitement);
       // 音色未就绪期间静默跳过（warmup 很快会完成）
@@ -309,7 +344,10 @@
 
   /** 调试 / 设置页展示当前引擎 */
   function engineInfo() {
-    return { engine: engine, tts: ttsSupported, ttsVoices: ttsVoicesReady, mespeak: mespeakState };
+    return {
+      engine: engine, preferred: preferred,
+      tts: ttsSupported, ttsVoices: ttsVoicesReady, mespeak: mespeakState
+    };
   }
 
   global.Voice = {
@@ -324,6 +362,7 @@
     seatGender: seatGender,
     warmup: warmup,
     engineInfo: engineInfo,
+    setPreferredEngine: setPreferredEngine,
     setEnabled: setEnabled,
     isEnabled: isEnabled
   };

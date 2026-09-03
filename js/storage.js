@@ -44,8 +44,10 @@
     voice: true,
     animation: true,
     baseScore: 100,
-    gameMode: 'ddz',   // 上次玩的模式（大厅高亮用）
-    mjDifficulty: 'hard'
+    gameMode: 'ddz',        // 上次玩的模式（大厅高亮用）
+    mjDifficulty: 'hard',
+    masterMute: false,      // 🔊 一键静音总开关
+    voiceEngine: 'auto'     // 语音引擎：auto | tts | mespeak | sfx
   };
 
   var memStore = {};

@@ -28,6 +28,17 @@
     ].forEach(function (id) { DOM[id] = el(id); });
     DOM.boxes = [el('mjBox-0'), el('mjBox-1'), el('mjBox-2'), el('mjBox-3')];
     DOM.rivers = [el('mjRiver-0'), el('mjRiver-1'), el('mjRiver-2'), el('mjRiver-3')];
+    // 手机端：点座位框展开/收起玩家信息（事件委托，重渲染不丢）
+    if (document.addEventListener) {
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        var box = t && t.closest ? t.closest('.mj-seat') : null;
+        if (!box) return;
+        for (var s = 0; s < DOM.boxes.length; s++) {
+          if (DOM.boxes[s] === box) { toggleSeatExpand(s); return; }
+        }
+      });
+    }
   }
 
   /* ---------------- 牌元素 ---------------- */
@@ -178,23 +189,48 @@
 
   var WIND = ['东', '南', '西', '北'];
 
+  /* 手机端座位默认折叠成头像+张数角标，点按临时展开（4 秒后自动收起） */
+  var seatExpandUntil = {};
+  var lastSeatArgs = {};
+
   function renderSeat(seat, p, state) {
     var box = DOM.boxes[seat];
     if (!box) return;
+    lastSeatArgs[seat] = [p, state];
     var isActive = state && state.activeSeat === seat;
     var isThinking = state && state.thinkingSeat === seat;
     var wind = WIND[(seat - (state ? state.dealer : 0) + 4) % 4];   // 相对庄家的风位显示
+    var expanded = !!seatExpandUntil[seat] && seatExpandUntil[seat] > Date.now();
 
     box.className = 'mj-seat mj-seat-' + seat +
+      (expanded ? ' expanded' : '') +
       (isActive ? ' active' : '') + (isThinking ? ' think' : '');
     box.innerHTML =
-      '<div class="avatar">' + p.avatar + '</div>' +
+      '<div class="avatar">' + p.avatar +
+      '<span class="cnt-badge">' + p.hand.length + '</span>' +
+      '</div>' +
       '<div class="p-info">' +
       '<div class="p-name">' + p.name +
       (state && state.dealer === seat ? ' <span class="dealer-tag">庄</span>' : '') +
       '</div>' +
       '<div class="p-meta">' + wind + '位 · 剩 <b>' + p.hand.length + '</b> 张</div>' +
       '</div>' + meldsHtml(p.melds);
+  }
+
+  function toggleSeatExpand(seat) {
+    if (seatExpandUntil[seat]) delete seatExpandUntil[seat];
+    else seatExpandUntil[seat] = Date.now() + 4000;
+    var args = lastSeatArgs[seat];
+    if (args) renderSeat(seat, args[0], args[1]);
+    if (seatExpandUntil[seat]) {
+      setTimeout(function () {
+        if (seatExpandUntil[seat] && seatExpandUntil[seat] <= Date.now()) {
+          delete seatExpandUntil[seat];
+          var a = lastSeatArgs[seat];
+          if (a) renderSeat(seat, a[0], a[1]);
+        }
+      }, 4200);
+    }
   }
 
   function meldsHtml(melds) {

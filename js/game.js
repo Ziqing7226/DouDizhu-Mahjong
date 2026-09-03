@@ -203,6 +203,8 @@
   }
 
   function newGame() {
+    // 温馨提醒闸门：连续游玩超半小时 → 先弹休息提醒，确认后再开局
+    if (global.Health && global.Health.gate(function () { newGame(); })) return;
     G.gen++;              // 作废旧局所有未执行的回调
     clearTimer();
     Dec.resetCache();
@@ -676,6 +678,20 @@
   }
 
   function doPass(seat) {
+    // 硬性不变量：领出方（无待跟牌）不能不要。
+    // AI 决策异常返回空/非法牌组时会走到这里，若放任 pass 会形成
+    // 「三家一直不出牌」的死循环（bug 实测出现过）。兜底：强制出最小单张。
+    if (!G.lastCombo) {
+      var h = P(seat).hand;
+      var smallest = h[h.length - 1];
+      var combo = smallest ? Cards.parse([smallest]) : null;
+      if (combo) {
+        if (seat !== 0) log(P(seat).name + ' 领出', seat === 0);
+        doPlay(seat, [smallest], combo);
+        return;
+      }
+      return;   // 没牌可出（理论不可达：nextTurn 已拦空手）
+    }
     lockActions();
     G.passCount++;
     UI.showPass(seat);
@@ -876,14 +892,6 @@
       '<p>叫分倍数（1~3）× 加倍（×2，超级加倍 ×4）× 每个炸弹 / 王炸（×2）× 春天（×2）</p>' +
       '<p>地主赢输按双倍计算：地主 ±2×底分×倍数，农民 ±底分×倍数。</p>' +
       '</div>' +
-      '<div class="sec"><h4>AI 难度</h4>' +
-      '<p><b>新手</b>：出牌随意，基本不用炸弹，不记牌。</p>' +
-      '<p><b>高手</b>：会拆牌算手数、记牌推算未出现的牌、残局用蒙特卡洛推演选最优解、' +
-      '农民按「上家放小 / 下家顶牌」定位配合。</p>' +
-      '<p><b>大师</b>：完全信息 AI（能看到所有人手牌，属于作弊难度），' +
-      '且本模式下<b>「提示」按钮整局隐藏</b>（按 H 仅弹提示）。' +
-      '它会精确封堵你的逃牌路线、准确找出自己的必胜出牌链，输给它不冤。</p>' +
-      '</div>' +
       '<div class="sec"><h4>操作</h4>' +
       '<p>点击手牌选中 / 取消；<b>按住并横向拖动可连选一排牌</b>，划过的牌全部选中。</p>' +
       '<p>再点「出牌」确认；「提示」可循环切换可出的组合。</p>' +
@@ -908,10 +916,8 @@
     // 老存档兼容：中等档已并入高手（三档收敛为 新手/高手/大师）
     if (G.difficulty === 'normal') G.difficulty = 'hard';
     G.baseScore = prefs.baseScore || 100;
-    Sound.setEnabled(prefs.sound !== false);
-    Bgm.setEnabled(prefs.music !== false);
+    applyAudioPower();
     Bgm.setVolume(prefs.musicVolume === undefined ? 0.4 : prefs.musicVolume);
-    if (typeof Voice !== 'undefined') Voice.setEnabled(prefs.voice !== false);
 
     syncTopbar();
 
@@ -920,19 +926,29 @@
     UI.el('btnHint').addEventListener('click', doHint);
     UI.el('btnClear').addEventListener('click', clearSelection);
 
+    /** 声音总闸：按各自偏好 + 总静音开关统一生效 */
+    function applyAudioPower() {
+      var p = Store.getPrefs();
+      var mute = !!p.masterMute;
+      Sound.setEnabled(!mute && p.sound !== false);
+      Bgm.setEnabled(!mute && p.music !== false);
+      if (typeof Voice !== 'undefined') Voice.setEnabled(!mute && p.voice !== false);
+    }
+
+    // 🔊 按钮 = 一键静音总开关（音效 + 音乐 + 语音一起静音/恢复）
     UI.el('btnSound').addEventListener('click', function () {
-      var on = !Sound.isEnabled();
-      Sound.setEnabled(on);
-      Store.setPrefs({ sound: on });
+      var mute = !Store.getPrefs().masterMute;
+      Store.setPrefs({ masterMute: mute });
+      applyAudioPower();
       syncTopbar();
-      if (on) Sound.play('select');
+      if (!mute) Sound.play('select');
     });
 
     // 背景音乐：独立开关 + 音量滑块
     UI.el('btnMusic').addEventListener('click', function () {
-      var on = !Bgm.isEnabled();
-      Bgm.setEnabled(on);
+      var on = !Store.getPrefs().music;
       Store.setPrefs({ music: on });
+      applyAudioPower();
       syncTopbar();
       if (on) UI.toast('背景音乐已开启');
       else UI.toast('背景音乐已关闭');
@@ -947,9 +963,9 @@
     // 语音播报：独立开关，男女声按座位分配（玩家女声，下家男声，上家女声）
     UI.el('btnVoice').addEventListener('click', function () {
       if (typeof Voice === 'undefined') { UI.toast('当前浏览器不支持语音播报'); return; }
-      var on = !Voice.isEnabled();
-      Voice.setEnabled(on);
+      var on = !Store.getPrefs().voice;
       Store.setPrefs({ voice: on });
+      applyAudioPower();
       syncTopbar();
       if (on) Voice.speak('语音播报已开启');
       else UI.toast('语音播报已关闭');
@@ -1040,8 +1056,10 @@
 
   function syncTopbar() {
     var sb = UI.el('btnSound');
-    sb.textContent = Sound.isEnabled() ? '🔊' : '🔇';
-    sb.classList.toggle('off', !Sound.isEnabled());
+    var muted = !!Store.getPrefs().masterMute;
+    sb.textContent = muted ? '🔇' : '🔊';
+    sb.classList.toggle('off', muted);
+    sb.title = muted ? '已全部静音（点击恢复）' : '一键静音（音效 + 音乐 + 语音）';
 
     var mb = UI.el('btnMusic');
     if (mb) {

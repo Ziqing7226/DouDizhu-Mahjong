@@ -114,7 +114,7 @@ body {
   top: 54px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 400;
+  z-index: 90;   /* 低于弹窗(100)：结算等弹窗打开时不遮挡 */
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -251,6 +251,23 @@ body {
   min-width: 190px;
   transition: box-shadow .2s, border-color .2s, transform .2s;
 }
+/* 剩余张数角标（手机折叠态可见） */
+.cnt-badge {
+  display: none;
+  position: absolute;
+  right: -7px; bottom: -7px;
+  min-width: 22px; height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  background: #14301f;
+  border: 1.5px solid var(--gold);
+  color: var(--gold-lt);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 19px;
+  text-align: center;
+  z-index: 2;
+}
 .player-box.active {
   border-color: var(--gold);
   box-shadow: 0 0 0 2px rgba(247, 201, 72, .5), 0 0 22px rgba(247, 201, 72, .55);
@@ -273,6 +290,7 @@ body {
   flex: 0 0 auto;
   position: relative;
 }
+.player-box, .mj-seat { position: relative; }
 .avatar .role-tag {
   position: absolute;
   bottom: -8px; left: 50%;
@@ -1393,6 +1411,42 @@ body {
 /* 侧栏拉手：桌面隐藏，移动端常驻牌桌右缘 */
 .sidebar-tab { display: none; }
 
+/* 拉手带文字标签 + 未打开时的脉冲提醒（挂在游戏视图右缘，抽屉收放不带走它） */
+.is-mobile .sidebar-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  position: absolute;
+  right: 0; top: 74px;
+  width: 40px; height: 96px;
+  border: 1px solid #fff3cd;
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  background: linear-gradient(180deg, #ffe9a8, var(--gold) 60%, #d99b10);
+  color: #4a1c00;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: -3px 3px 10px rgba(0, 0, 0, .35);
+  padding: 0;
+  z-index: 46;
+}
+.is-mobile .sidebar-tab i {
+  writing-mode: vertical-rl;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+.is-mobile .sidebar-tab.pulse { animation: tabPulse 1.5s ease-in-out infinite; }
+@keyframes tabPulse {
+  0%, 100% { transform: translateX(0); box-shadow: -3px 3px 10px rgba(0, 0, 0, .35); }
+  50% { transform: translateX(5px); box-shadow: 8px 3px 18px rgba(247, 201, 72, .55); }
+}
+/* 抽屉打开时隐藏拉手，避免压住面板内容 */
+.game-view.drawer-open .sidebar-tab { opacity: 0; pointer-events: none; }
+
 /* ---- 顶栏：紧凑化，去掉音量滑块（保留音乐开关） ---- */
 .is-mobile .topbar { flex: 0 0 46px; padding: 0 10px; }
 .is-mobile .brand { gap: 10px; }
@@ -1422,22 +1476,7 @@ body {
   overflow-y: auto;
 }
 .is-mobile .sidebar.open { transform: translateX(0); }
-.is-mobile .sidebar-tab {
-  display: grid;
-  place-items: center;
-  position: absolute;
-  left: -34px; top: 14px;
-  width: 34px; height: 76px;
-  border: 1px solid #fff3cd;
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  background: linear-gradient(180deg, #ffe9a8, var(--gold) 60%, #d99b10);
-  color: #4a1c00;
-  font-size: 16px;
-  cursor: pointer;
-  box-shadow: -3px 3px 10px rgba(0, 0, 0, .35);
-  padding: 0;
-}
+/* 拉手主样式见上方「侧栏拉手」区块（图标 + 竖排文字） */
 
 /* ---- 斗地主：牌与按钮放大（设计稿层面） ---- */
 .is-mobile {
@@ -1445,8 +1484,34 @@ body {
   --card-h: 100px;
   --card-gap: 34px;
 }
-.is-mobile .top-row { flex-basis: 122px; }
-.is-mobile .player-box { min-width: 200px; }
+/* 顶牌行按内容自适应（底牌卡有布局高，需单独压缩） */
+.is-mobile .top-row { flex: 0 0 auto; padding: 6px 14px 0; }
+.is-mobile .bottom-cards { height: 80px; align-items: flex-start; }
+.is-mobile .table-center { min-height: 140px; }
+/* “我的”区域改为两行 flex：手牌一行、操作按钮一行，压缩纵向 */
+.is-mobile .my-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.is-mobile .my-row .hand-wrap { flex: 1 1 auto; min-width: 0; }
+.is-mobile .my-row .action-bar { flex: 1 1 100%; justify-content: center; padding: 4px 0 8px; }
+/* 座位折叠：默认只显示头像 + 张数角标，点按临时展开，不遮挡牌区 */
+.is-mobile .player-box {
+  min-width: 0;
+  padding: 6px;
+  gap: 0;
+  cursor: pointer;
+}
+.is-mobile .player-box .p-info,
+.is-mobile .player-box .mini-cards { display: none; }
+.is-mobile .player-box.expanded .p-info { display: block; }
+.is-mobile .player-box.expanded .mini-cards { display: flex; }
+.is-mobile .player-box.expanded { min-width: 190px; gap: 10px; padding: 8px 12px; }
+.is-mobile .cnt-badge { display: block; }
+.is-mobile .mj-seat { padding: 6px; gap: 0; cursor: pointer; }
+.is-mobile .mj-seat .p-info,
+.is-mobile .mj-seat .mj-melds { display: none; }
+.is-mobile .mj-seat.expanded .p-info { display: block; }
+.is-mobile .mj-seat.expanded .mj-melds { display: flex; }
+.is-mobile .mj-seat.expanded { gap: 8px; padding: 7px 11px; }
+.is-mobile .mj-seat .cnt-badge { display: block; }
 .is-mobile .avatar { width: 52px; height: 52px; font-size: 26px; }
 .is-mobile .action-bar .btn { min-width: 116px; padding: 12px 24px; font-size: 17px; }
 .is-mobile .bottom-cards .card { transform: scale(.8); transform-origin: top center; }
@@ -1466,6 +1531,10 @@ body {
 .is-mobile .mj-actions .btn { padding: 11px 0; font-size: 16px; }
 .is-mobile .mj-seat .avatar { width: 46px; height: 46px; font-size: 23px; }
 .is-mobile .mj-wall-info { font-size: 12px; }
+
+/* 语音引擎选择（侧栏面板）：四枚等宽小按钮 */
+.voice-panel .seg { width: 100%; }
+.voice-panel .seg button { flex: 1; padding: 7px 0; font-size: 12px; }
 
 /* ---- 争抢浮层：按钮更大更顺拇指 ---- */
 .is-mobile .float-panel { top: 60%; padding: 16px 20px; }

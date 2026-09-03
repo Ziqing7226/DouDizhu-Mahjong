@@ -46,6 +46,9 @@
   // 与 #app 的 min-width 一致；高度取桌面布局的舒适最小值
   var DESIGN_W = 1000;
   var DESIGN_H = 520;
+  // 手机端布局放大后的内容最小高度（顶栏+牌桌各行+手牌+操作栏），
+  // 缩放必须同时保证这个高度放得下，否则底部手牌会被裁掉
+  var DESIGN_H_M = 560;
 
   var app = null, body = null;
 
@@ -71,10 +74,13 @@
 
     if (vw >= DESIGN_W) { reset(); return; }   // 大屏横铺足够，无需缩放
 
-    var scale = vw / DESIGN_W;
+    // 同时满足宽度（1000 设计稿）与高度（560 手机内容最小高），
+    // 取更小的缩放，保证纵向不被裁切；多出的宽度转化为更宽的牌桌
+    var scale = Math.min(vw / DESIGN_W, vh / DESIGN_H_M);
+    var appW = Math.round(vw / scale);
     var appH = Math.round(vh / scale);
-    app.style.width = DESIGN_W + 'px';
-    app.style.height = appH + 'px';            // 拉高到视口比例，恰好铺满
+    app.style.width = appW + 'px';
+    app.style.height = appH + 'px';
     app.style.transform = 'scale(' + scale + ')';
     app.style.transformOrigin = '0 0';
     app.style.position = 'absolute';
