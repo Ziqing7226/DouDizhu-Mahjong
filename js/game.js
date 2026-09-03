@@ -896,7 +896,7 @@
       '<p>点击手牌选中 / 取消；<b>按住并横向拖动可连选一排牌</b>，划过的牌全部选中。</p>' +
       '<p>再点「出牌」确认；「提示」可循环切换可出的组合。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时会自动不要或自动出最小的一手。</p>' +
-      '<p>顶栏 🗣 可开关<b>语音播报</b>：任何一方出牌都会念出牌型（对二、三带一、不要…）。</p>' +
+      '<p>顶栏 🗣 同时开关<b>音效与语音播报</b>：任何一方出牌都会念出牌型（对二、三带一、不要…）。</p>' +
       '<p>语音引擎三层兜底：系统 TTS（Edge / 桌面 / iOS）→ 本地合成（无引擎的安卓 / 鸿蒙）→ 语义音效。' +
       'iPad / iPhone 若完全无声，请检查<b>侧边静音键</b>（硬件静音会屏蔽网页音频）。</p>' +
       '</div>',
@@ -926,23 +926,13 @@
     UI.el('btnHint').addEventListener('click', doHint);
     UI.el('btnClear').addEventListener('click', clearSelection);
 
-    /** 声音总闸：按各自偏好 + 总静音开关统一生效 */
+    /** 🗣 开关同时控制「语音播报 + 音效」，🎵 只管背景音乐 */
     function applyAudioPower() {
       var p = Store.getPrefs();
-      var mute = !!p.masterMute;
-      Sound.setEnabled(!mute && p.sound !== false);
-      Bgm.setEnabled(!mute && p.music !== false);
-      if (typeof Voice !== 'undefined') Voice.setEnabled(!mute && p.voice !== false);
+      Sound.setEnabled(p.voice !== false);
+      Bgm.setEnabled(p.music !== false);
+      if (typeof Voice !== 'undefined') Voice.setEnabled(p.voice !== false);
     }
-
-    // 🔊 按钮 = 一键静音总开关（音效 + 音乐 + 语音一起静音/恢复）
-    UI.el('btnSound').addEventListener('click', function () {
-      var mute = !Store.getPrefs().masterMute;
-      Store.setPrefs({ masterMute: mute });
-      applyAudioPower();
-      syncTopbar();
-      if (!mute) Sound.play('select');
-    });
 
     // 背景音乐：独立开关 + 音量滑块
     UI.el('btnMusic').addEventListener('click', function () {
@@ -960,15 +950,14 @@
       Store.setPrefs({ musicVolume: v });
     });
 
-    // 语音播报：独立开关，男女声按座位分配（玩家女声，下家男声，上家女声）
+    // 🗣：音效 + 语音播报一起开关
     UI.el('btnVoice').addEventListener('click', function () {
-      if (typeof Voice === 'undefined') { UI.toast('当前浏览器不支持语音播报'); return; }
-      var on = !Store.getPrefs().voice;
+      var on = Store.getPrefs().voice === false;   // 翻转
       Store.setPrefs({ voice: on });
       applyAudioPower();
       syncTopbar();
       if (on) Voice.speak('语音播报已开启');
-      else UI.toast('语音播报已关闭');
+      else UI.toast('音效与语音已关闭');
       Sound.play('select');
     });
 
@@ -1055,12 +1044,6 @@
   }
 
   function syncTopbar() {
-    var sb = UI.el('btnSound');
-    var muted = !!Store.getPrefs().masterMute;
-    sb.textContent = muted ? '🔇' : '🔊';
-    sb.classList.toggle('off', muted);
-    sb.title = muted ? '已全部静音（点击恢复）' : '一键静音（音效 + 音乐 + 语音）';
-
     var mb = UI.el('btnMusic');
     if (mb) {
       mb.textContent = Bgm.isEnabled() ? '🎵' : '🚫';
@@ -1074,6 +1057,7 @@
       var vOn = (typeof Voice !== 'undefined') && Voice.isEnabled();
       vb.textContent = vOn ? '🗣' : '🤫';
       vb.classList.toggle('off', !vOn);
+      vb.title = vOn ? '音效 + 语音播报开关（点击关闭）' : '音效 + 语音播报已关闭（点击开启）';
     }
   }
 

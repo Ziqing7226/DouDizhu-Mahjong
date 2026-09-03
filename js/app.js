@@ -168,28 +168,6 @@
   App.Health = Health;
   global.Health = Health;   // 供各游戏 newGame 的开局闸门使用
 
-  /* ---------------- 语音引擎选择（侧栏面板） ---------------- */
-
-  function bindVoiceSeg() {
-    var btns = document.querySelectorAll('.voice-seg button');
-    var sync = function () {
-      var cur = Store.getPrefs().voiceEngine || 'auto';
-      btns.forEach(function (b) {
-        b.classList.toggle('on', b.dataset.ve === cur);
-      });
-    };
-    btns.forEach(function (b) {
-      b.addEventListener('click', function () {
-        Store.setPrefs({ voiceEngine: b.dataset.ve });
-        if (global.Voice) global.Voice.setPreferredEngine(b.dataset.ve);
-        sync();
-        if (global.Sound) global.Sound.play('select');
-        if (global.UI) UI.toast('语音引擎：' + b.textContent);
-      });
-    });
-    sync();
-  }
-
   /* ---------------- 信息抽屉（移动端） ---------------- */
 
   function bindDrawers() {
@@ -203,6 +181,17 @@
         view.classList.toggle('drawer-open', open);
         tab.classList.remove('pulse');          // 打开过一次就不再脉冲提醒
         if (global.Sound) global.Sound.play('select');
+      });
+    });
+    // 点击抽屉以外的任意区域 → 收起（拉手与抽屉内部点击除外）
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.closest && (t.closest('.sidebar') || t.closest('.sidebar-tab'))) return;
+      document.querySelectorAll('.sidebar.open').forEach(function (s) {
+        s.classList.remove('open');
+      });
+      document.querySelectorAll('.game-view.drawer-open').forEach(function (v) {
+        v.classList.remove('drawer-open');
       });
     });
   }
@@ -230,10 +219,6 @@
 
     // 移动端信息抽屉拉手（两个游戏视图各一个）
     bindDrawers();
-
-    // 语音引擎选择（侧栏面板），应用上次偏好
-    bindVoiceSeg();
-    if (global.Voice) global.Voice.setPreferredEngine(Store.getPrefs().voiceEngine || 'auto');
 
     // 温馨提醒：进入游戏即记下「记忆时刻」
     Health.remember();

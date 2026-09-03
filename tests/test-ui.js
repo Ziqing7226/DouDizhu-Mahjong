@@ -716,14 +716,16 @@ ok(roomBtns.some(b => b.dataset.d === 'easy') && roomBtns.some(b => b.dataset.d 
 // 顶栏不应再有难度切换按钮
 ok(!registry.diffSeg, '顶栏的难度切换按钮应已删除');
 
-// 音效开关
-const soundBtn = registry.btnSound;
-ok(!!(soundBtn && soundBtn._h && soundBtn._h.click), '音效按钮未绑定事件');
-const before = ctx.Sound.isEnabled();
-click(soundBtn);
-ok(ctx.Sound.isEnabled() === !before, '音效开关未生效');
-click(soundBtn);
-ok(ctx.Sound.isEnabled() === before, '音效开关未恢复');
+// 🗣 开关：音效 + 语音播报一起开关
+const voiceBtn = registry.btnVoice;
+ok(!!(voiceBtn && voiceBtn._h && voiceBtn._h.click), '语音按钮未绑定事件');
+const vBefore = ctx.Voice.isEnabled();
+click(voiceBtn);
+ok(ctx.Voice.isEnabled() === !vBefore, '语音开关未生效');
+ok(ctx.Sound.isEnabled() === !vBefore, '语音开关应同时控制音效');
+click(voiceBtn);
+ok(ctx.Voice.isEnabled() === vBefore, '语音开关未恢复');
+ok(!registry.btnSound, '🔊 一键静音按钮应已删除（音效并入 🗣）');
 
 // 战绩弹窗
 click(registry.btnStats);

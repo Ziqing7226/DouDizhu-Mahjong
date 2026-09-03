@@ -30,36 +30,10 @@
   var ttsSupported = !!(synth && global.SpeechSynthesisUtterance);
   var enabled = true;
 
-  /* 引擎状态：'tts' → 'mespeak' → 'sfx'（逐层降级，最终稳定） */
+  /* 引擎状态：'tts' → 'mespeak' → 'sfx'（自动逐层降级，最终稳定） */
   var engine = ttsSupported ? 'tts' : 'boot';
-  var preferred = 'auto';        // auto | tts | mespeak | sfx（用户可切换，持久化）
   var ttsVoicesReady = false;    // 系统 TTS 是否确认有可用音色
   var mespeakState = 'idle';     // idle | loading | ready | failed
-  var mespeakProbing = false;
-
-  /** 用户指定引擎（自动 = 按 TTS 可用性逐层兜底；其余锁定该层） */
-  function setPreferredEngine(mode) {
-    if (['auto', 'tts', 'mespeak', 'sfx'].indexOf(mode) < 0) return;
-    preferred = mode;
-    applyPreferred();
-  }
-
-  function applyPreferred() {
-    if (preferred === 'sfx') { engine = 'sfx'; return; }
-    if (preferred === 'tts') {
-      engine = (ttsSupported && ttsVoicesReady) ? 'tts' : 'sfx';
-      return;
-    }
-    if (preferred === 'mespeak') {
-      if (mespeakState === 'ready') { engine = 'mespeak'; return; }
-      engine = 'boot';
-      escalate();
-      return;
-    }
-    // auto：系统 TTS 可用就用，否则逐层兜底
-    if (ttsSupported && ttsVoicesReady) { engine = 'tts'; return; }
-    escalate();
-  }
 
   /* ---- 音色挑选：各家引擎的中文音色命名不统一，按名字猜男女 ---- */
   var MALE_RE = /yunxi|yunjian|yunyang|yunye|kangkang|liang|male|男声|康康|云健|云希|云扬/i;
@@ -156,7 +130,6 @@
   /* ---------------- 第二层：meSpeak 本地合成 ---------------- */
 
   var MS_BASE = 'js/vendor/';
-  var MS_FILES = ['mespeak.js', 'mespeak-core.js', 'mespeak_config.json', 'mespeak-zh.json'];
 
   function escalate() {
     // 已就绪直接启用；加载中就等它（poll 由首次加载驱动）
@@ -168,32 +141,24 @@
       if (!ok) return mespeakFail();
       var ms = global.meSpeak;
       if (!ms) return mespeakFail();
-      // meSpeak v2.0.7 前端：loadCustomConfig 接受页面相对路径，
-      // loadVoice 只接受「相对 mespeak.js 所在目录」的文件名（传完整路径会解析成错误地址），
-      // 且回调在部分平台上不可靠 —— 统一用「发射后轮询就绪状态」驱动
-      try { ms.loadCustomConfig(MS_BASE + 'mespeak_config.json'); } catch (e) { return mespeakFail(); }
-      poll(function () {
-        try { return ms.isConfigLoaded(); } catch (e) { return false; }
-      }, 15000, function (cfgOk) {
-        if (!cfgOk) return mespeakFail();
-        try { ms.loadVoice('mespeak-zh.json'); } catch (e) { return mespeakFail(); }
-        poll(function () {
-          try { return ms.isVoiceLoaded('zh'); } catch (e) { return false; }
-        }, 15000, function (vOk) {
-          if (!vOk) return mespeakFail();
-          // 能力探测：合成一句不抛异常即认为就绪（音色已注册是必要条件）
-          try { ms.speak('好', { voice: 'zh' }); } catch (e) { return mespeakFail(); }
-          mespeakState = 'ready';
-          engine = 'mespeak';
-          mespeakProbing = false;
-        });
-      });
+      // v1.9.6 同步 API：loadConfig/loadVoice 直接吃 JSON 对象，无需轮询
+      Promise.all([
+        fetch(MS_BASE + 'mespeak_config.json').then(function (r) { return r.json(); }),
+        fetch(MS_BASE + 'mespeak-zh.json').then(function (r) { return r.json(); })
+      ]).then(function (arr) {
+        ms.loadConfig(arr[0]);
+        ms.loadVoice(arr[1]);
+        // 能力探测：真合成一小段，拿到非空 WAV 字节才算就绪
+        var probe = ms.speak('好', { rawdata: 'arraybuffer', voice: 'zh', amplitude: 170 });
+        if (!probe || probe.byteLength < 200) return mespeakFail();
+        mespeakState = 'ready';
+        engine = 'mespeak';
+      }).catch(function () { mespeakFail(); });
     });
   }
 
   function mespeakFail() {
     mespeakState = 'failed';
-    mespeakProbing = false;
     engine = 'sfx';   // 第三层：语义音效
   }
 
@@ -205,21 +170,18 @@
     (document.head || document.getElementsByTagName('head')[0]).appendChild(s);
   }
 
-  function poll(cond, timeoutMs, done) {
-    var t0 = Date.now();
-    (function step() {
-      if (cond()) return done(true);
-      if (Date.now() - t0 > timeoutMs) return done(false);
-      setTimeout(step, 300);
-    })();
-  }
-
+  /**
+   * 合成播报：meSpeak 同步产出 WAV 字节，再经由我们「已解锁」的
+   * WebAudio 上下文播放 —— 不依赖 meSpeak 自带的（在懒加载场景下
+   * 会被浏览器自动播放策略挂起的）音频上下文，全平台保证出声。
+   */
   function mespeakSpeak(text, gender, excitement) {
     try {
       // 清洗文本：全角标点/空白会被合成引擎念成杂音，全部去掉
       var clean = String(text).replace(/[！!？?，,。.～~、：:；;「」()\[\]（）\s]+/g, '');
       if (!clean) return;
-      global.meSpeak.speak(clean, {
+      var wav = global.meSpeak.speak(clean, {
+        rawdata: 'arraybuffer',
         voice: 'zh',
         amplitude: 175,
         // 男声压低音高，女声略高；语速稍慢更清楚（eSpeak 中文按字读音）
@@ -227,6 +189,33 @@
         speed: 152,
         wordgap: 1
       });
+      if (!wav || !wav.byteLength) return;
+      playWavBytes(wav);
+    } catch (e) { /* 忽略 */ }
+  }
+
+  /** 用游戏自身的（手势解锁过的）AudioContext 播放 WAV 字节；
+   *  短语连播按时长串行排程，避免叠音 */
+  var speakUntil = 0;
+  function playWavBytes(bytes) {
+    var ac = global.Sound && global.Sound.getRawContext ? global.Sound.getRawContext() : null;
+    if (!ac) return;
+    var done = function (buf) {
+      try {
+        var src = ac.createBufferSource();
+        src.buffer = buf;
+        var gain = ac.createGain();
+        gain.gain.value = 0.9;
+        src.connect(gain);
+        gain.connect(ac.destination);
+        var at = Math.max(ac.currentTime, speakUntil);
+        src.start(at);
+        speakUntil = at + buf.duration + 0.05;
+      } catch (e) { /* 忽略 */ }
+    };
+    try {
+      var p = ac.decodeAudioData(bytes, done, function () { });
+      if (p && p.then) p.then(done, function () { });
     } catch (e) { /* 忽略 */ }
   }
 
@@ -273,10 +262,6 @@
 
   function speak(text, gender, excitement, cue) {
     if (!enabled || !text) return;
-    if (preferred === 'tts' && !(ttsSupported && ttsVoicesReady)) {
-      cueFor(text, gender, cue);   // 指定真人但没有引擎 → 音效
-      return;
-    }
     if (engine === 'tts') {
       if (ttsVoicesReady) ttsSpeak(text, gender, excitement);
       // 音色未就绪期间静默跳过（warmup 很快会完成）
@@ -345,7 +330,7 @@
   /** 调试 / 设置页展示当前引擎 */
   function engineInfo() {
     return {
-      engine: engine, preferred: preferred,
+      engine: engine,
       tts: ttsSupported, ttsVoices: ttsVoicesReady, mespeak: mespeakState
     };
   }
@@ -362,7 +347,6 @@
     seatGender: seatGender,
     warmup: warmup,
     engineInfo: engineInfo,
-    setPreferredEngine: setPreferredEngine,
     setEnabled: setEnabled,
     isEnabled: isEnabled
   };
