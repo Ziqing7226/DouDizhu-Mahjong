@@ -97,7 +97,7 @@
     box.innerHTML =
       '<div class="avatar">' + p.avatar +
       (roleText ? '<span class="role-tag ' + roleCls + '">' + roleText + '</span>' : '') +
-      '<span class="cnt-badge">' + p.hand.length + '</span>' +
+      '<span class="cnt-badge">剩' + p.hand.length + '张</span>' +
       '</div>' +
       '<div class="p-info">' +
       '<div class="p-name">' + p.name + '</div>' +
@@ -112,13 +112,14 @@
   }
 
   /* ---------------- 回合倒计时环 ----------------
-   * 行动方头像外圈的 30 秒进度环 + 秒数角标（对标主流斗地主）。
+   * 行动方头像外圈的 30 秒红色进度环（对标主流斗地主，不带数字角标——
+   * 精确秒数由「出牌 (N)」按钮呈现，头像上不堆数字）。
    * 数据由游戏层驱动：setTurnClock 锚定起点，clearTurnClock 在行动后撤销；
    * 这里只负责画——每秒根据截止时刻换算剩余，环用 CSS 过渡平滑消耗。
    * AI 的 30 秒是装饰性的（它 1~3 秒就会出牌，环提前消失）。 */
 
   var CLOCK_C = (2 * Math.PI * 27).toFixed(3);   // viewBox r=27 的周长
-  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{avatar,svg,prg,badge} }
+  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{avatar,svg,prg} }
 
   function setTurnClock(seat, totalSec) {
     clearTurnClock();
@@ -137,7 +138,7 @@
     clockTick();
   }
 
-  /** 游戏层每秒喂入玩家真实剩余秒数，保证角标与「出牌 (N)」按钮完全同步 */
+  /** 游戏层每秒喂入玩家真实剩余秒数（环的消耗速率与按钮倒计时完全同步） */
   function tickTurnClock(leftSec) {
     if (!clock) return;
     clock.explicit = leftSec;
@@ -147,19 +148,13 @@
   function clearTurnClock() {
     if (!clock) return;
     if (clock.iv) clearInterval(clock.iv);
-    if (clock.els) {
-      if (clock.els.svg) clock.els.svg.remove();
-      if (clock.els.badge) clock.els.badge.remove();
-    }
+    if (clock.els && clock.els.svg) clock.els.svg.remove();
     clock = null;
   }
 
   function injectTurnClock(avatar) {
     if (!clock) return;
-    if (clock.els) {   // 上一份元素可能还挂在别的头像上，先摘掉
-      if (clock.els.svg) clock.els.svg.remove();
-      if (clock.els.badge) clock.els.badge.remove();
-    }
+    if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的头像上
     var svgNS = 'http://www.w3.org/2000/svg';
     var mkSVG = document.createElementNS
       ? function (t) { return document.createElementNS(svgNS, t); }
@@ -179,28 +174,20 @@
     svg.appendChild(trk);
     svg.appendChild(prg);
 
-    var badge = document.createElement('span');
-    badge.setAttribute('class', 'turn-sec');
-
     avatar.appendChild(svg);
-    avatar.appendChild(badge);
-    clock.els = { avatar: avatar, svg: svg, prg: prg, badge: badge };
+    clock.els = { avatar: avatar, svg: svg, prg: prg };
     clockTick();
   }
 
   function clockTick() {
     if (!clock) return;
-    var left = (clock.endsAt - Date.now()) / 1000;
+    var left = clock.explicit != null
+      ? clock.explicit
+      : (clock.endsAt - Date.now()) / 1000;
     if (left < 0) left = 0;
     var frac = clock.total > 0 ? left / clock.total : 0;
     if (clock.els && clock.els.prg) {
       clock.els.prg.style.strokeDashoffset = (CLOCK_C * (1 - frac)).toFixed(1);
-    }
-    if (clock.els && clock.els.badge) {
-      var v = (clock.explicit != null) ? clock.explicit : Math.ceil(left - 0.001);
-      if (v < 0) v = 0;
-      clock.els.badge.textContent = String(v);
-      clock.els.badge.classList.toggle('low', v <= 5 && clock.explicit != null);
     }
   }
 

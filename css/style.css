@@ -251,20 +251,20 @@ body {
   min-width: 190px;
   transition: box-shadow .2s, border-color .2s, transform .2s;
 }
-/* 剩余张数角标（手机折叠态可见） */
+/* 剩余张数角标（手机折叠态可见）——「剩x张」文字胶囊，一眼可读 */
 .cnt-badge {
   display: none;
   position: absolute;
   right: -7px; bottom: -7px;
-  min-width: 22px; height: 22px;
-  padding: 0 5px;
-  border-radius: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
   background: #14301f;
   border: 1.5px solid var(--gold);
   color: var(--gold-lt);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
-  line-height: 19px;
+  line-height: 1.5;
+  white-space: nowrap;
   text-align: center;
   z-index: 5;
 }
@@ -306,7 +306,8 @@ body {
 .role-farmer { background: linear-gradient(180deg, #69c0ff, #096dd9); color: #fff; }
 
 /* ---------------- 回合倒计时环（行动方头像外圈，斗地主/麻将共用） ----------------
- * 紧贴头像外扩 5px 的 SVG 进度环 + 右上角秒数角标。
+ * 紧贴头像外扩 5px 的 SVG 进度环（红色，与金色头像底高对比）。
+ * 不带数字角标：精确秒数由「出牌 (N)」按钮呈现。
  * pointer-events:none、不参与布局，任何分辨率下都不会遮挡或挤压其他元素；
  * 环随 SVG viewBox 等比缩放，头像 40/46/52px 均自适应。 */
 .turn-ring {
@@ -317,7 +318,7 @@ body {
   transform: rotate(-90deg);
   pointer-events: none;
   z-index: 3;
-  filter: drop-shadow(0 0 4px rgba(247, 201, 72, .6));
+  filter: drop-shadow(0 0 4px rgba(255, 82, 82, .65));
   overflow: visible;
 }
 .turn-ring circle {
@@ -325,42 +326,13 @@ body {
   stroke-width: 4;
   stroke-linecap: round;
 }
-.turn-ring .trk { stroke: rgba(255, 244, 214, .22); }
+.turn-ring .trk { stroke: rgba(255, 244, 214, .25); }
 .turn-ring .prg {
-  stroke: var(--gold, #f7c948);
+  stroke: #ff5252;
   transition: stroke-dashoffset 1s linear;
 }
-.turn-sec {
-  position: absolute;
-  top: -9px; right: -9px;
-  min-width: 21px;
-  height: 21px;
-  padding: 0 5px;
-  border-radius: 11px;
-  background: #33230d;
-  border: 1.5px solid var(--gold);
-  color: #ffe9b8;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 18px;
-  text-align: center;
-  z-index: 6;
-  pointer-events: none;
-  box-shadow: 0 0 10px rgba(247, 201, 72, .4);
-  font-variant-numeric: tabular-nums;
-}
-/* 仅剩 5 秒内（真实回合才有）转红闪烁，与提示音同步 */
-.turn-sec.low {
-  background: #571715;
-  border-color: #ff7875;
-  color: #fff;
-  box-shadow: 0 0 10px rgba(255, 120, 117, .55);
-  animation: secBlink 1s ease-in-out infinite;
-}
-@keyframes secBlink { 50% { opacity: .5; } }
 @media (prefers-reduced-motion: reduce) {
   .turn-ring .prg { transition: none; }
-  .turn-sec.low { animation: none; }
 }
 
 .p-info { line-height: 1.45; min-width: 0; }
@@ -1285,11 +1257,11 @@ body {
 
 /* 副露小牌 */
 .mtile.mini {
-  width: 20px;
-  height: 28px;
+  width: 24px;
+  height: 33px;
   border-radius: 3px;
   box-shadow: none;
-  font-size: 8.5px;
+  font-size: 10.5px;
 }
 
 /* ---------------- 座位框 ---------------- */
@@ -1390,25 +1362,25 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  width: 224px;          /* 横排：每行 6 张（34+4） */
-  height: 146px;         /* 3 行封顶 */
+  width: 260px;          /* 横排：每行 6 张（40+4） */
+  height: 170px;         /* 3 行封顶 */
   z-index: 2;
 }
 .mj-river-0 { flex-flow: row wrap-reverse; }      /* 我家：第一排贴我，向桌心长 */
 .mj-river-1, .mj-river-3 {
-  width: 146px;          /* 竖排：3 列（横置牌 46+4） */
-  height: 224px;         /* 6 行（34+4） */
+  width: 170px;          /* 竖排：3 列（横置牌 54+4） */
+  height: 260px;         /* 6 行（40+4） */
 }
 .mj-river-1 { flex-flow: column-reverse wrap-reverse; }  /* 右家：列贴右缘起向桌心，列内自下而上 */
 .mj-river-3 { flex-flow: column wrap; }                   /* 左家：列贴左缘起向桌心，列内自上而下 */
-.mj-river .mtile { width: 34px; height: 46px; font-size: 15px; opacity: .96; }
+.mj-river .mtile { width: 40px; height: 54px; font-size: 17px; opacity: .96; }
 .mj-river .mtile.last { box-shadow: 0 0 0 2px var(--gold), 0 4px 12px rgba(0, 0, 0, .5); }
 /* 牌头朝桌心：左家 +90°、右家 -90°、对家 180°（天凤/雀魂同款） */
 .mj-river-3 .mtile { transform: rotate(90deg); }
 .mj-river-1 .mtile { transform: rotate(-90deg); }
 .mj-river-2 .mtile { transform: rotate(180deg); }
 /* 竖排单元格：按横置后的占位排布 */
-.rv-cell { width: 46px; height: 34px; display: grid; place-items: center; }
+.rv-cell { width: 54px; height: 40px; display: grid; place-items: center; }
 
 /* 河位：对家贴顶（让开座位胶囊）、我家贴底、左右沿边垂直居中 */
 .mj-river-2 { top: 72px; left: 50%; transform: translateX(-50%); }
@@ -1434,10 +1406,10 @@ body {
 .mj-melds-2 .mtile.mini { transform: rotate(180deg); }
 /* 左右两家的每组副露转成纵向一列（对标主流：侧家副露竖排） */
 .mj-melds-1 .mj-meld, .mj-melds-3 .mj-meld { flex-direction: column; }
-.mj-melds-2 { top: 72px; left: calc(50% + 120px); }
-.mj-melds-1 { top: 50%; right: 166px; transform: translateY(-50%); flex-flow: column wrap; max-height: 224px; max-width: 96px; }
-.mj-melds-3 { top: 50%; left: 166px; transform: translateY(-50%); flex-flow: column wrap; max-height: 224px; max-width: 96px; }
-.mj-melds-0 { bottom: 174px; left: 14px; max-width: 220px; }   /* 我的座位胶囊上方 */
+.mj-melds-2 { top: 72px; left: calc(50% + 138px); }
+.mj-melds-1 { top: 50%; right: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
+.mj-melds-3 { top: 50%; left: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
+.mj-melds-0 { bottom: 174px; left: 14px; max-width: 260px; }   /* 我的座位胶囊上方 */
 
 /* 牌墙余数 / 巡目：桌心一行小字（主流惯例：中央信息克制） */
 .mj-wall-info {
@@ -1591,7 +1563,7 @@ body {
 .is-mobile .mj-seat .p-meta { display: none; }
 .is-mobile .mj-seat .cnt-badge { display: block; }
 /* 副露已迁出到独立条（.mj-melds-strip），座位框只保留头像+名字 */
-.is-mobile .mtile.mini { width: 18px; height: 25px; font-size: 8.5px; }
+.is-mobile .mtile.mini { width: 22px; height: 30px; font-size: 10px; }
 .is-mobile .avatar { width: 52px; height: 52px; font-size: 26px; }
 .is-mobile .action-bar .btn { min-width: 116px; padding: 12px 24px; font-size: 17px; }
 .is-mobile .bottom-cards .card { transform: scale(.8); transform-origin: top center; }
@@ -1604,26 +1576,26 @@ body {
   margin-left: -4px;
   font-size: 27px;
 }
-/* 牌河缩小一档：横排 6 列 ×183px，竖排 3 列 ×120px，围桌几何不变 */
-.is-mobile .mj-river { width: 183px; height: 120px; gap: 3px; }
-.is-mobile .mj-river .mtile { width: 28px; height: 38px; font-size: 13px; }
-.is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 120px; height: 183px; }
-.is-mobile .rv-cell { width: 38px; height: 28px; }
+/* 牌河缩小一档（相对桌面）：横排 6 列 ×207px，竖排 3 列 ×138px，围桌几何不变 */
+.is-mobile .mj-river { width: 207px; height: 138px; gap: 3px; }
+.is-mobile .mj-river .mtile { width: 32px; height: 44px; font-size: 14px; }
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 138px; height: 207px; }
+.is-mobile .rv-cell { width: 44px; height: 32px; }
 .is-mobile .mj-river-2 { top: 70px; left: 50%; transform: translateX(-50%); }
 /* 侧河上移避开底部胶囊，右河左移让出操作按钮竖条 */
-.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 46%; transform: translateY(-50%); }
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 44%; transform: translateY(-50%); }
 .is-mobile .mj-river-1 { right: 104px; }
 .is-mobile .mj-river-0 { bottom: 112px; }
-.is-mobile .mj-melds-strip { max-width: 140px; }
-.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 100px); }
-.is-mobile .mj-melds-1 { top: 46%; right: 232px; transform: translateY(-50%); }
-.is-mobile .mj-melds-3 { top: 46%; left: 140px; transform: translateY(-50%); }
+.is-mobile .mj-melds-strip { max-width: 150px; }
+.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 112px); }
+.is-mobile .mj-melds-1 { top: 44%; right: 250px; transform: translateY(-50%); max-height: 207px; }
+.is-mobile .mj-melds-3 { top: 44%; left: 158px; transform: translateY(-50%); max-height: 207px; }
 /* 我的副露与我的胶囊同排（胶囊右侧），不再向上挤占牌河空间 */
-.is-mobile .mj-melds-0 { bottom: 112px; left: 200px; max-width: 150px; }
+.is-mobile .mj-melds-0 { bottom: 112px; left: 200px; max-width: 160px; }
 .is-mobile .mj-actions { width: 84px; gap: 9px; }
 .is-mobile .mj-actions .btn { padding: 11px 0; font-size: 16px; }
 .is-mobile .mj-seat .avatar { width: 46px; height: 46px; font-size: 23px; }
-.is-mobile .mj-wall-info { font-size: 12px; }
+.is-mobile .mj-wall-info { top: 45%; font-size: 12px; }
 
 /* 语音引擎选择（侧栏面板）：四枚等宽小按钮 */
 .voice-panel .seg { width: 100%; }
