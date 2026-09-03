@@ -323,6 +323,11 @@ const ctx = {
   performance: { now: () => vnow },
   requestAnimationFrame: () => 1,
   cancelAnimationFrame: () => { },
+  // window 级事件监听（app.js 的 resize/orientationchange 等）：桩化记录，不触发
+  addEventListener(ev, fn) { (this._winH = this._winH || {})[ev] = fn; },
+  removeEventListener(ev) { delete (this._winH || {})[ev]; },
+  innerWidth: 1280,
+  innerHeight: 800,
   setTimeout: vSetTimeout,
   clearTimeout: vClear,
   setInterval: vSetInterval,

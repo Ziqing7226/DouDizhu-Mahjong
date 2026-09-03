@@ -266,7 +266,7 @@ body {
   font-weight: 800;
   line-height: 19px;
   text-align: center;
-  z-index: 2;
+  z-index: 5;
 }
 .player-box.active {
   border-color: var(--gold);
@@ -300,9 +300,68 @@ body {
   border-radius: 8px;
   white-space: nowrap;
   font-weight: 700;
+  z-index: 5;
 }
 .role-landlord { background: linear-gradient(180deg, #ff7a45, #d4380d); color: #fff; }
 .role-farmer { background: linear-gradient(180deg, #69c0ff, #096dd9); color: #fff; }
+
+/* ---------------- 回合倒计时环（行动方头像外圈，斗地主/麻将共用） ----------------
+ * 紧贴头像外扩 5px 的 SVG 进度环 + 右上角秒数角标。
+ * pointer-events:none、不参与布局，任何分辨率下都不会遮挡或挤压其他元素；
+ * 环随 SVG viewBox 等比缩放，头像 40/46/52px 均自适应。 */
+.turn-ring {
+  position: absolute;
+  inset: -5px;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 0 4px rgba(247, 201, 72, .6));
+  overflow: visible;
+}
+.turn-ring circle {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.turn-ring .trk { stroke: rgba(255, 244, 214, .22); }
+.turn-ring .prg {
+  stroke: var(--gold, #f7c948);
+  transition: stroke-dashoffset 1s linear;
+}
+.turn-sec {
+  position: absolute;
+  top: -9px; right: -9px;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 11px;
+  background: #33230d;
+  border: 1.5px solid var(--gold);
+  color: #ffe9b8;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  z-index: 6;
+  pointer-events: none;
+  box-shadow: 0 0 10px rgba(247, 201, 72, .4);
+  font-variant-numeric: tabular-nums;
+}
+/* 仅剩 5 秒内（真实回合才有）转红闪烁，与提示音同步 */
+.turn-sec.low {
+  background: #571715;
+  border-color: #ff7875;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 120, 117, .55);
+  animation: secBlink 1s ease-in-out infinite;
+}
+@keyframes secBlink { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) {
+  .turn-ring .prg { transition: none; }
+  .turn-sec.low { animation: none; }
+}
 
 .p-info { line-height: 1.45; min-width: 0; }
 .p-name { font-size: 13px; font-weight: 700; color: #ffe9b8; }
@@ -490,15 +549,40 @@ body {
 }
 .btn.sm { min-width: 68px; padding: 6px 14px; font-size: 13px; }
 
-/* ---------------- 侧栏：记牌器 ---------------- */
-
-.sidebar {
-  flex: 0 0 232px;
+/* ---------------- 记牌器 / 余牌器：顶栏 📋 下拉面板 ----------------
+ * 不再占用牌桌宽度（桌面）或整条抽屉（手机），改为顶栏按钮唤出的
+ * 右上角下拉层；打开时只覆盖牌桌右上角，点外部任意处收起。 */
+.counter-drop {
+  position: fixed;
+  top: 58px;
+  right: 10px;
+  width: min(308px, calc(100vw - 20px));
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 0;
+  gap: 10px;
+  z-index: 70;
+  opacity: 0;
+  transform: translateY(-8px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
 }
+.counter-drop.open {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+}
+.counter-drop.ddz .mj-only,
+.counter-drop.mj .ddz-only { display: none; }
+.counter-drop .panel {
+  background: linear-gradient(180deg, rgba(74, 11, 8, .97), rgba(56, 7, 5, .97));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+  flex: 0 0 auto;
+}
+.icon-btn.on { background: rgba(255, 233, 168, .28); box-shadow: inset 0 0 0 1px rgba(255, 233, 168, .5); }
 
 .panel {
   background: rgba(0, 0, 0, .3);
@@ -1035,10 +1119,21 @@ body {
   min-width: 0;
   border-radius: 18px;
   border: 2px solid var(--gold-dk);
+  /* 日麻桌布：深蓝藏青（对标雀魂/天凤），与斗地主的绿桌区分 */
   background:
-    radial-gradient(ellipse 70% 55% at 50% 45%, var(--felt-1) 0%, var(--felt-2) 72%, #0e3a21 100%);
+    radial-gradient(ellipse 70% 55% at 50% 45%, #3d5f95 0%, #26426f 72%, #172c4e 100%);
   box-shadow: inset 0 0 60px rgba(0, 0, 0, .45), var(--shadow);
   overflow: hidden;
+}
+/* 伪装 2.5D：桌缘一圈暗角（顶光效果），不参与布局与点击 */
+.mj-table::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 110px rgba(0, 0, 0, .38), inset 0 14px 30px rgba(255, 255, 240, .06);
+  z-index: 1;
 }
 
 /* ---------------- 麻将牌（专业牌面：CSS 图案 + SVG 雀鸟） ---------------- */
@@ -1048,9 +1143,10 @@ body {
   width: 38px;
   height: 52px;
   border-radius: 5px;
-  background: linear-gradient(160deg, #fffef8 0%, #f3eedd 100%);
+  background: linear-gradient(168deg, #ffffff 0%, #fbf7ec 55%, #efe8d2 100%);
   border: 1px solid #cfc4ad;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, .35);
+  /* 伪装 2.5D：底部一条「牌侧」+ 投影，让平铺的牌有厚度 */
+  box-shadow: 0 3px 0 #c6b896, 0 6px 9px rgba(0, 0, 0, .32);
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -1060,20 +1156,20 @@ body {
   color: #333;
 }
 
-/* --- 万子：汉字数 + 红「萬」 --- */
+/* --- 万子：汉字数 + 红「萬」（数字加大提级，对标主流游戏的高对比牌面） --- */
 .mtile .wn {
   font-family: "Kaiti SC", "KaiTi", "STKaiti", "SimSun", serif;
   font-weight: 900;
-  font-size: .8em;
+  font-size: .95em;
   line-height: 1;
   color: #16337f;
 }
 .mtile .ww {
   font-family: "Kaiti SC", "KaiTi", "STKaiti", "SimSun", serif;
   font-weight: 900;
-  font-size: .64em;
+  font-size: .62em;
   line-height: 1;
-  margin-top: 12%;
+  margin-top: 6%;
   color: #c0392b;
 }
 
@@ -1159,7 +1255,7 @@ body {
 .mtile .hon {
   font-family: "Kaiti SC", "KaiTi", "STKaiti", "SimSun", serif;
   font-weight: 900;
-  font-size: .92em;
+  font-size: 1.08em;
   line-height: 1;
   color: #23262d;
 }
@@ -1219,14 +1315,14 @@ body {
   border-color: #7fd1ff;
   box-shadow: 0 0 0 2px rgba(127, 209, 255, .45);
 }
-.mj-seat-2 { top: 10px; left: 50%; transform: translateX(-50%); max-width: 380px; }
-.mj-seat-1 { top: 40px; right: 12px; max-width: 185px; }
-.mj-seat-3 { top: 40px; left: 12px; max-width: 185px; }
+.mj-seat-2 { top: 10px; left: 50%; transform: translateX(-50%); max-width: 320px; }
+.mj-seat-1 { top: 10px; right: 12px; max-width: 185px; }
+.mj-seat-3 { top: 10px; left: 12px; max-width: 185px; }
 /* 我的信息框：悬浮在手牌行上方左侧，不占手牌宽度 */
 .mj-seat-0 {
   position: absolute;
   left: 14px;
-  bottom: 96px;
+  bottom: 112px;
   max-width: 215px;
   z-index: 7;
 }
@@ -1254,17 +1350,8 @@ body {
   color: #fff;
 }
 
-/* 副露展示：横向换行，避免座位框被撑高 */
-.mj-melds {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 3px 6px;
-  margin-left: 6px;
-  max-width: 150px;
-}
+/* 副露的组内排布（条容器接管整体位置，见 .mj-melds-strip） */
 .mj-meld { display: flex; gap: 1px; }
-.mj-seat-2 .mj-melds, .mj-seat-0 .mj-melds { max-width: 300px; }
 
 /* ---------------- 气泡 ---------------- */
 
@@ -1284,6 +1371,8 @@ body {
   color: #4a1c00;
   animation: boomPop .45s ease-out;
 }
+/* 对家胶囊贴着桌顶，气泡往下弹，避免被牌桌裁掉 */
+.mj-seat-2 .mj-bubble { top: auto; bottom: -30px; }
 .mj-bubble.win {
   background: linear-gradient(180deg, #ff7875, #cf1322);
   color: #fff;
@@ -1292,43 +1381,79 @@ body {
   animation: springIn 1.4s ease-out forwards;
 }
 
-/* ---------------- 牌河 ---------------- */
-
+/* ---------------- 牌河：四家 6×3 定格，围桌排布 ----------------
+ * 对家/我家横排（6 列×3 行），左右两家竖排（3 列×6 行，牌横置）。
+ * 朝向统一「牌头指桌心」：各家牌河读起来对他们是正的（对家牌对我倒置），
+ * 牌河从各家身边向桌心生长。只显示最近 18 张（6×3），无堆叠无外溢。 */
 .mj-river {
   position: absolute;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  width: 186px;          /* 每行 5 张（34+4） */
-  align-content: flex-start;
+  width: 224px;          /* 横排：每行 6 张（34+4） */
+  height: 146px;         /* 3 行封顶 */
   z-index: 2;
 }
-.mj-river .mtile {
-  width: 34px;
-  height: 46px;
-  font-size: 15px;
-  opacity: .96;
+.mj-river-0 { flex-flow: row wrap-reverse; }      /* 我家：第一排贴我，向桌心长 */
+.mj-river-1, .mj-river-3 {
+  width: 146px;          /* 竖排：3 列（横置牌 46+4） */
+  height: 224px;         /* 6 行（34+4） */
 }
-.mj-river .mtile.last {
-  box-shadow: 0 0 0 2px var(--gold), 0 4px 12px rgba(0, 0, 0, .5);
-}
-.mj-river-2 { top: 78px; left: 50%; transform: translateX(-50%); }
-.mj-river-0 { bottom: 104px; left: 50%; transform: translateX(-50%); }
-.mj-river-1 { top: 120px; right: 12px; }
-.mj-river-3 { top: 120px; left: 12px; }
+.mj-river-1 { flex-flow: column-reverse wrap-reverse; }  /* 右家：列贴右缘起向桌心，列内自下而上 */
+.mj-river-3 { flex-flow: column wrap; }                   /* 左家：列贴左缘起向桌心，列内自上而下 */
+.mj-river .mtile { width: 34px; height: 46px; font-size: 15px; opacity: .96; }
+.mj-river .mtile.last { box-shadow: 0 0 0 2px var(--gold), 0 4px 12px rgba(0, 0, 0, .5); }
+/* 牌头朝桌心：左家 +90°、右家 -90°、对家 180°（天凤/雀魂同款） */
+.mj-river-3 .mtile { transform: rotate(90deg); }
+.mj-river-1 .mtile { transform: rotate(-90deg); }
+.mj-river-2 .mtile { transform: rotate(180deg); }
+/* 竖排单元格：按横置后的占位排布 */
+.rv-cell { width: 46px; height: 34px; display: grid; place-items: center; }
 
+/* 河位：对家贴顶（让开座位胶囊）、我家贴底、左右沿边垂直居中 */
+.mj-river-2 { top: 72px; left: 50%; transform: translateX(-50%); }
+.mj-river-0 { bottom: 120px; left: 50%; transform: translateX(-50%); }
+.mj-river-1 { top: 50%; right: 12px; transform: translateY(-50%); }
+.mj-river-3 { top: 50%; left: 12px; transform: translateY(-50%); }
+
+/* ---------------- 副露条：贴各家牌河末端，归属分明 ---------------- */
+.mj-melds-strip {
+  position: absolute;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-content: flex-start;
+  max-width: 170px;
+  min-height: 28px;
+  z-index: 3;
+}
+.mj-melds-strip .mj-melds { display: contents; }   /* 排布直接交给条容器 */
+/* 副露朝向与各家牌河一致：左家 +90°、右家 -90°、对家 180°（逐张转，小牌近方形不串位） */
+.mj-melds-3 .mtile.mini { transform: rotate(90deg); }
+.mj-melds-1 .mtile.mini { transform: rotate(-90deg); }
+.mj-melds-2 .mtile.mini { transform: rotate(180deg); }
+/* 左右两家的每组副露转成纵向一列（对标主流：侧家副露竖排） */
+.mj-melds-1 .mj-meld, .mj-melds-3 .mj-meld { flex-direction: column; }
+.mj-melds-2 { top: 72px; left: calc(50% + 120px); }
+.mj-melds-1 { top: 50%; right: 166px; transform: translateY(-50%); flex-flow: column wrap; max-height: 224px; max-width: 96px; }
+.mj-melds-3 { top: 50%; left: 166px; transform: translateY(-50%); flex-flow: column wrap; max-height: 224px; max-width: 96px; }
+.mj-melds-0 { bottom: 174px; left: 14px; max-width: 220px; }   /* 我的座位胶囊上方 */
+
+/* 牌墙余数 / 巡目：桌心一行小字（主流惯例：中央信息克制） */
 .mj-wall-info {
   position: absolute;
-  top: 8px;
-  left: 12px;
-  padding: 2px 12px;
-  border-radius: 11px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 3px 14px;
+  border-radius: 12px;
   font-size: 11px;
   font-weight: 700;
   color: #ffe9b8;
   background: rgba(0, 0, 0, .32);
   border: 1px solid rgba(255, 215, 130, .3);
-  z-index: 4;
+  white-space: nowrap;
+  z-index: 2;
 }
 
 /* ---------------- 我的手牌 ---------------- */
@@ -1404,48 +1529,9 @@ body {
 
 /* ==========================================================
  * 手机横屏 · 手游化布局（.is-mobile 由 mobile.js 添加）
- * 思路：在 1000px 设计稿层面隐藏侧栏（牌桌占满）、放大牌与按钮，
- * 再整体等比缩放铺满横屏 —— 信息面板收进右侧抽屉，拉手常驻。
+ * 思路：在 1000px 设计稿层面隐藏信息面板入口（收进顶栏 📋 下拉）、
+ * 放大牌与按钮，再整体等比缩放铺满横屏。
  * ========================================================== */
-
-/* 侧栏拉手：桌面隐藏，移动端常驻牌桌右缘 */
-.sidebar-tab { display: none; }
-
-/* 拉手带文字标签 + 未打开时的脉冲提醒（挂在游戏视图右缘，抽屉收放不带走它） */
-.is-mobile .sidebar-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  position: absolute;
-  right: 0; top: 74px;
-  width: 40px; height: 96px;
-  border: 1px solid #fff3cd;
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  background: linear-gradient(180deg, #ffe9a8, var(--gold) 60%, #d99b10);
-  color: #4a1c00;
-  font-size: 16px;
-  cursor: pointer;
-  box-shadow: -3px 3px 10px rgba(0, 0, 0, .35);
-  padding: 0;
-  z-index: 46;
-}
-.is-mobile .sidebar-tab i {
-  writing-mode: vertical-rl;
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 2px;
-}
-.is-mobile .sidebar-tab.pulse { animation: tabPulse 1.5s ease-in-out infinite; }
-@keyframes tabPulse {
-  0%, 100% { transform: translateX(0); box-shadow: -3px 3px 10px rgba(0, 0, 0, .35); }
-  50% { transform: translateX(5px); box-shadow: 8px 3px 18px rgba(247, 201, 72, .55); }
-}
-/* 抽屉打开时隐藏拉手，避免压住面板内容 */
-.game-view.drawer-open .sidebar-tab { opacity: 0; pointer-events: none; }
 
 /* ---- 顶栏：紧凑化，去掉音量滑块（保留音乐开关） ---- */
 .is-mobile .topbar { flex: 0 0 46px; padding: 0 10px; }
@@ -1460,23 +1546,8 @@ body {
 .is-mobile .main { padding: 8px 10px 8px; gap: 0; }
 .is-mobile .game-view { position: relative; }
 
-/* 侧栏 → 右侧抽屉（默认收起，拉手在外） */
-.is-mobile .sidebar {
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: 252px;
-  padding: 12px 10px;
-  margin: 0;
-  border-radius: 14px 0 0 14px;
-  background: linear-gradient(180deg, rgba(74, 11, 8, .97), rgba(56, 7, 5, .97));
-  box-shadow: -14px 0 40px rgba(0, 0, 0, .55);
-  transform: translateX(100%);
-  transition: transform .26s ease;
-  z-index: 45;
-  overflow-y: auto;
-}
-.is-mobile .sidebar.open { transform: translateX(0); }
-/* 拉手主样式见上方「侧栏拉手」区块（图标 + 竖排文字） */
+/* 记牌器下拉：贴住 46px 顶栏之下 */
+.is-mobile .counter-drop { top: 52px; right: 8px; max-height: calc(100vh - 64px); }
 
 /* ---- 斗地主：牌与按钮放大（设计稿层面） ---- */
 .is-mobile {
@@ -1492,26 +1563,35 @@ body {
 .is-mobile .my-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .is-mobile .my-row .hand-wrap { flex: 1 1 auto; min-width: 0; }
 .is-mobile .my-row .action-bar { flex: 1 1 100%; justify-content: center; padding: 4px 0 8px; }
-/* 座位折叠：默认只显示头像 + 张数角标，点按临时展开，不遮挡牌区 */
+/* 座位信息常显（不再折叠）：头像 + 名字横排 + 张数角标；
+ * 窄屏空间有限，名字超长用省略号截断保单行，省略次要文字 */
 .is-mobile .player-box {
   min-width: 0;
-  padding: 6px;
-  gap: 0;
-  cursor: pointer;
+  padding: 6px 9px;
+  gap: 7px;
 }
-.is-mobile .player-box .p-info,
+.is-mobile .player-box .p-info { display: block; min-width: 0; }
+.is-mobile .player-box .p-name {
+  max-width: 88px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-mobile .player-box .p-meta,
 .is-mobile .player-box .mini-cards { display: none; }
-.is-mobile .player-box.expanded .p-info { display: block; }
-.is-mobile .player-box.expanded .mini-cards { display: flex; }
-.is-mobile .player-box.expanded { min-width: 190px; gap: 10px; padding: 8px 12px; }
 .is-mobile .cnt-badge { display: block; }
-.is-mobile .mj-seat { padding: 6px; gap: 0; cursor: pointer; }
-.is-mobile .mj-seat .p-info,
-.is-mobile .mj-seat .mj-melds { display: none; }
-.is-mobile .mj-seat.expanded .p-info { display: block; }
-.is-mobile .mj-seat.expanded .mj-melds { display: flex; }
-.is-mobile .mj-seat.expanded { gap: 8px; padding: 7px 11px; }
+.is-mobile .mj-seat { padding: 6px 8px; gap: 7px; }
+.is-mobile .mj-seat .p-info { display: block; min-width: 0; }
+.is-mobile .mj-seat .p-name {
+  max-width: 76px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.is-mobile .mj-seat .p-meta { display: none; }
 .is-mobile .mj-seat .cnt-badge { display: block; }
+/* 副露已迁出到独立条（.mj-melds-strip），座位框只保留头像+名字 */
+.is-mobile .mtile.mini { width: 18px; height: 25px; font-size: 8.5px; }
 .is-mobile .avatar { width: 52px; height: 52px; font-size: 26px; }
 .is-mobile .action-bar .btn { min-width: 116px; padding: 12px 24px; font-size: 17px; }
 .is-mobile .bottom-cards .card { transform: scale(.8); transform-origin: top center; }
@@ -1524,9 +1604,22 @@ body {
   margin-left: -4px;
   font-size: 27px;
 }
-.is-mobile .mj-river { width: 206px; gap: 4px; }
-.is-mobile .mj-river .mtile { width: 38px; height: 52px; font-size: 17px; }
-.is-mobile .mtile.mini { width: 24px; height: 33px; font-size: 10.5px; }
+/* 牌河缩小一档：横排 6 列 ×183px，竖排 3 列 ×120px，围桌几何不变 */
+.is-mobile .mj-river { width: 183px; height: 120px; gap: 3px; }
+.is-mobile .mj-river .mtile { width: 28px; height: 38px; font-size: 13px; }
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 120px; height: 183px; }
+.is-mobile .rv-cell { width: 38px; height: 28px; }
+.is-mobile .mj-river-2 { top: 70px; left: 50%; transform: translateX(-50%); }
+/* 侧河上移避开底部胶囊，右河左移让出操作按钮竖条 */
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 46%; transform: translateY(-50%); }
+.is-mobile .mj-river-1 { right: 104px; }
+.is-mobile .mj-river-0 { bottom: 112px; }
+.is-mobile .mj-melds-strip { max-width: 140px; }
+.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 100px); }
+.is-mobile .mj-melds-1 { top: 46%; right: 232px; transform: translateY(-50%); }
+.is-mobile .mj-melds-3 { top: 46%; left: 140px; transform: translateY(-50%); }
+/* 我的副露与我的胶囊同排（胶囊右侧），不再向上挤占牌河空间 */
+.is-mobile .mj-melds-0 { bottom: 112px; left: 200px; max-width: 150px; }
 .is-mobile .mj-actions { width: 84px; gap: 9px; }
 .is-mobile .mj-actions .btn { padding: 11px 0; font-size: 16px; }
 .is-mobile .mj-seat .avatar { width: 46px; height: 46px; font-size: 23px; }

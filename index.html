@@ -26,6 +26,7 @@
       </div>
       <div class="topbar-right">
         <button class="icon-btn" id="btnFullscreen" title="全屏 / 退出全屏">⛶</button>
+        <button class="icon-btn" id="btnCounter" title="记牌器 / 对局信息">📋</button>
         <button class="icon-btn" id="btnMusic" title="背景音乐开关">🎵</button>
         <input type="range" class="vol-slider" id="volMusic" min="0" max="100" value="40" title="音乐音量">
         <button class="icon-btn" id="btnVoice" title="音效 + 语音播报开关">🗣</button>
@@ -104,25 +105,6 @@
 
       </div>
 
-      <!-- ============ 侧栏 ============ -->
-      <button class="sidebar-tab pulse" data-side="#ddzView .sidebar" title="展开 / 收起信息面板">📋<i>记牌器</i></button>
-      <aside class="sidebar">
-        <div class="panel">
-          <h3>记 牌 器 <span class="sub">未出现的牌</span></h3>
-          <div class="counter-grid" id="counterGrid"></div>
-        </div>
-
-        <div class="panel">
-          <h3>对 局 信 息</h3>
-          <div class="info-list" id="infoList"></div>
-        </div>
-
-        <div class="panel">
-          <h3>出 牌 记 录</h3>
-          <div class="log-list" id="logList"></div>
-        </div>
-      </aside>
-
       </div>
 
       <!-- ============ 麻将视图 ============ -->
@@ -154,16 +136,23 @@
             </div>
           </div>
 
-          <!-- 对手座位：0 我 / 1 右 / 2 上 / 3 左 -->
+          <!-- 对手座位：0 我 / 1 右 / 2 上 / 3 左（四角小胶囊） -->
           <div class="mj-seat mj-seat-2" id="mjBox-2"></div>
           <div class="mj-seat mj-seat-1" id="mjBox-1"></div>
           <div class="mj-seat mj-seat-3" id="mjBox-3"></div>
 
-          <!-- 牌河 -->
+          <!-- 牌河：四家各 6×3 定格，左右两家竖排（牌面朝向各自玩家） -->
           <div class="mj-river mj-river-2" id="mjRiver-2"></div>
           <div class="mj-river mj-river-1" id="mjRiver-1"></div>
           <div class="mj-river mj-river-3" id="mjRiver-3"></div>
           <div class="mj-river mj-river-0" id="mjRiver-0"></div>
+
+          <!-- 副露条：贴各家牌河末端，归属排布 -->
+          <div class="mj-melds-strip mj-melds-2" id="mjMelds-2"></div>
+          <div class="mj-melds-strip mj-melds-1" id="mjMelds-1"></div>
+          <div class="mj-melds-strip mj-melds-3" id="mjMelds-3"></div>
+          <div class="mj-melds-strip mj-melds-0" id="mjMelds-0"></div>
+
           <div class="mj-wall-info" id="mjWallInfo">牌墙余 — 张</div>
 
           <!-- 我的手牌 + 操作 -->
@@ -180,29 +169,40 @@
 
         </div>
 
-        <!-- ============ 麻将侧栏 ============ -->
-        <button class="sidebar-tab pulse" data-side="#mjView .sidebar" title="展开 / 收起信息面板">📋<i>余牌器</i></button>
-        <aside class="sidebar">
-          <div class="panel">
-            <h3>余 牌 器 <span class="sub">未出现的牌</span></h3>
-            <div class="counter-grid mj-counter" id="mjCounterGrid"></div>
-          </div>
-          <div class="panel">
-            <h3>对 局 信 息</h3>
-            <div class="info-list" id="mjInfoList"></div>
-          </div>
-          <div class="panel">
-            <h3>各 家 积 分</h3>
-            <div class="info-list" id="mjScoreList"></div>
-          </div>
-          <div class="panel">
-            <h3>牌 谱</h3>
-            <div class="log-list" id="mjLogList"></div>
-          </div>
-        </aside>
-
       </div>
 
+    </div>
+  </div>
+
+  <!-- ============ 记牌器 / 余牌器 下拉面板（顶栏 📋，两游戏共用） ============ -->
+  <div class="counter-drop" id="counterDrop">
+    <div class="panel ddz-only">
+      <h3>记 牌 器 <span class="sub">未出现的牌</span></h3>
+      <div class="counter-grid" id="counterGrid"></div>
+    </div>
+    <div class="panel ddz-only">
+      <h3>对 局 信 息</h3>
+      <div class="info-list" id="infoList"></div>
+    </div>
+    <div class="panel ddz-only">
+      <h3>出 牌 记 录</h3>
+      <div class="log-list" id="logList"></div>
+    </div>
+    <div class="panel mj-only">
+      <h3>余 牌 器 <span class="sub">未出现的牌</span></h3>
+      <div class="counter-grid mj-counter" id="mjCounterGrid"></div>
+    </div>
+    <div class="panel mj-only">
+      <h3>对 局 信 息</h3>
+      <div class="info-list" id="mjInfoList"></div>
+    </div>
+    <div class="panel mj-only">
+      <h3>各 家 积 分</h3>
+      <div class="info-list" id="mjScoreList"></div>
+    </div>
+    <div class="panel mj-only">
+      <h3>牌 谱</h3>
+      <div class="log-list" id="mjLogList"></div>
     </div>
   </div>
 

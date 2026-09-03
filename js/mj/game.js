@@ -139,8 +139,9 @@
     for (var s = 0; s < 4; s++) {
       MjUI.renderSeat(s, P(s), st);
       MjUI.renderRiver(s, P(s).river, lastId);
+      MjUI.renderMelds(s, P(s).melds);
     }
-    MjUI.renderWall(G.wall.length);
+    MjUI.renderWall(G.wall.length, G.drawCount);
     MjUI.renderCounter(unseenCounts());
     updateInfo();
     updateScore();
@@ -201,6 +202,7 @@
   function enterLobby() {
     G.gen++;
     clearTimer();
+    MjUI.clearTurnClock();
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
@@ -221,6 +223,7 @@
   function suspend() {
     G.gen++;
     clearTimer();
+    MjUI.clearTurnClock();
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
@@ -238,6 +241,7 @@
     if (global.Health && global.Health.gate(function () { newGame(); })) return;
     G.gen++;
     clearTimer();
+    MjUI.clearTurnClock();
     AI.resetCache();
     UI.closeFloat();
     UI.closeDialog();
@@ -396,6 +400,8 @@
     G.busy = true;
     G.thinkingSeat = p.seat;
     renderAll();
+    // AI 打牌决策与玩家打牌同环节，同样挂 30 秒倒计时环（AI 1~3 秒即出）
+    MjUI.setTurnClock(p.seat, TURN_SECONDS);
     var cfg = AI.CFG[G.difficulty];
     var wait = cfg.thinkMs[0] + Math.random() * (cfg.thinkMs[1] - cfg.thinkMs[0]);
     later(wait, function () {
@@ -442,6 +448,7 @@
     });
     Sound.play('turn');
     startTimer();
+    MjUI.setTurnClock(0, TURN_SECONDS);
   }
 
   function setActions(cfg) {
@@ -518,6 +525,7 @@
   /* ---------- 打牌 ---------- */
 
   function doDiscard(seat, tile) {
+    MjUI.clearTurnClock();
     var p = P(seat);
     p.hand = p.hand.filter(function (t) { return t.id !== tile.id; });
     delete tile.lingshang;
@@ -850,6 +858,7 @@
   }
 
   function doWin(winnerSeat, opts) {
+    MjUI.clearTurnClock();
     UI.closeFloat();
     var w = P(winnerSeat);
     if (!opts.selfDraw) {
@@ -1012,7 +1021,6 @@
       '<p>「提示」按高手思路推荐打牌（大师模式隐藏）。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时自动打推荐牌 / 自动过。</p>' +
       '<p><b>自动胡</b>：自摸 / 接炮 / 抢杠能胡时自动和牌，无需按键。</p>' +
-      '<p>若听不到任何声音，请检查设备是否处于静音状态。</p>' +
       '</div>',
       [{ text: '知道了', cls: 'gold' }]
     );
@@ -1029,6 +1037,7 @@
       G.timeLeft--;
       if (G.timeLeft <= 0) { clearTimer(); autoAct(); return; }
       if (G.timeLeft <= 5) Sound.play('warn');
+      MjUI.tickTurnClock(G.timeLeft);
     }, 1000);
   }
 

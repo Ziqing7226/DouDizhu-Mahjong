@@ -28,7 +28,7 @@
 
   function bindDom() {
     ['gameLobby', 'btnGameMode', 'logoText', 'ddzView', 'mjView',
-      'btnFullscreen', 'fsBanner', 'btnFsGo', 'btnFsClose'].forEach(function (id) {
+      'btnFullscreen', 'btnCounter', 'counterDrop', 'fsBanner', 'btnFsGo', 'btnFsClose'].forEach(function (id) {
       DOM[id] = el(id);
     });
   }
@@ -39,12 +39,7 @@
     if (App.current === 'mj' && global.MjGame) global.MjGame.suspend();
     App.current = null;
     UI.closeDialog();
-    document.querySelectorAll('.sidebar.open').forEach(function (s) {
-      s.classList.remove('open');
-    });
-    document.querySelectorAll('.game-view.drawer-open').forEach(function (v) {
-      v.classList.remove('drawer-open');
-    });
+    closeCounterDrop();
     highlightRooms();
     DOM.gameLobby.classList.add('show');
   };
@@ -54,13 +49,10 @@
     if (mode !== 'ddz' && mode !== 'mj') return;
     Store.setPrefs({ gameMode: mode });
     App.current = mode;
-    // 收起所有抽屉（移动端侧栏）
-    document.querySelectorAll('.sidebar.open').forEach(function (s) {
-      s.classList.remove('open');
-    });
-    document.querySelectorAll('.game-view.drawer-open').forEach(function (v) {
-      v.classList.remove('drawer-open');
-    });
+    closeCounterDrop();
+    // 下拉面板按模式显隐对应面板（ddz-only / mj-only）
+    DOM.counterDrop.classList.toggle('ddz', mode === 'ddz');
+    DOM.counterDrop.classList.toggle('mj', mode === 'mj');
     DOM.gameLobby.classList.remove('show');
     DOM.ddzView.style.display = (mode === 'ddz') ? '' : 'none';
     DOM.mjView.style.display = (mode === 'mj') ? '' : 'none';
@@ -168,31 +160,26 @@
   App.Health = Health;
   global.Health = Health;   // 供各游戏 newGame 的开局闸门使用
 
-  /* ---------------- 信息抽屉（移动端） ---------------- */
+  /* ---------------- 记牌器 / 余牌器 下拉面板（顶栏 📋） ---------------- */
 
-  function bindDrawers() {
-    var tabs = document.querySelectorAll('.sidebar-tab');
-    tabs.forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        var view = tab.closest('.game-view');
-        var sidebar = document.querySelector(tab.dataset.side);
-        var open = !sidebar.classList.contains('open');
-        sidebar.classList.toggle('open', open);
-        view.classList.toggle('drawer-open', open);
-        tab.classList.remove('pulse');          // 打开过一次就不再脉冲提醒
-        if (global.Sound) global.Sound.play('select');
-      });
+  function closeCounterDrop() {
+    if (!DOM.counterDrop) return;
+    DOM.counterDrop.classList.remove('open');
+    DOM.btnCounter.classList.remove('on');
+  }
+
+  function bindCounterDrop() {
+    DOM.btnCounter.addEventListener('click', function () {
+      var open = !DOM.counterDrop.classList.contains('open');
+      DOM.counterDrop.classList.toggle('open', open);
+      DOM.btnCounter.classList.toggle('on', open);
+      if (global.Sound) global.Sound.play('select');
     });
-    // 点击抽屉以外的任意区域 → 收起（拉手与抽屉内部点击除外）
+    // 点击面板与按钮以外的任意区域 → 收起
     document.addEventListener('click', function (e) {
       var t = e.target;
-      if (t && t.closest && (t.closest('.sidebar') || t.closest('.sidebar-tab'))) return;
-      document.querySelectorAll('.sidebar.open').forEach(function (s) {
-        s.classList.remove('open');
-      });
-      document.querySelectorAll('.game-view.drawer-open').forEach(function (v) {
-        v.classList.remove('drawer-open');
-      });
+      if (t && t.closest && (t.closest('#counterDrop') || t.closest('#btnCounter'))) return;
+      closeCounterDrop();
     });
   }
 
@@ -217,8 +204,8 @@
       })(btns[i]);
     }
 
-    // 移动端信息抽屉拉手（两个游戏视图各一个）
-    bindDrawers();
+    // 顶栏 📋：记牌器 / 余牌器下拉面板（两个游戏共用，按模式显隐）
+    bindCounterDrop();
 
     // 温馨提醒：进入游戏即记下「记忆时刻」
     Health.remember();

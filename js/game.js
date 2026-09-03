@@ -207,6 +207,7 @@
     if (global.Health && global.Health.gate(function () { newGame(); })) return;
     G.gen++;              // 作废旧局所有未执行的回调
     clearTimer();
+    UI.clearTurnClock();
     Dec.resetCache();
     UI.closeFloat();
     UI.closeDialog();
@@ -452,6 +453,8 @@
     var p = P(G.turn);
     if (!p.hand.length) { return; }
     renderAll();
+    // 行动方头像挂 30 秒倒计时环（AI 与玩家同款；AI 1~3 秒即出，环提前消失）
+    UI.setTurnClock(G.turn, TURN_SECONDS);
 
     if (p.isAI) aiTurn(G.turn);
     else humanTurn();
@@ -635,6 +638,7 @@
   /* ---------- 执行出牌 / 不要 ---------- */
 
   function doPlay(seat, cards, combo) {
+    UI.clearTurnClock();
     lockActions();
     var p = P(seat);
     var ids = new Set(cards.map(function (c) { return c.id; }));
@@ -678,6 +682,7 @@
   }
 
   function doPass(seat) {
+    UI.clearTurnClock();
     // 硬性不变量：领出方（无待跟牌）不能不要。若决策层出现任何异常
     // （理论上不应发生），兜底出「最优拆解的第一手」——仍来自算法的
     // 最优化决策，而非随手出最小单张；若连拆解都失败，才退到最小单张。
@@ -731,6 +736,7 @@
         return;
       }
       if (G.timeLeft <= 5) Sound.play('warn');
+      UI.tickTurnClock(G.timeLeft);
       updateActionBar();
     }, 1000);
     updateActionBar();
@@ -762,6 +768,7 @@
   function settle(winner) {
     G.phase = 'over';
     clearTimer();
+    UI.clearTurnClock();
     UI.clearAllSlots();
 
     var landlordWin = (winner === G.landlord);
@@ -836,6 +843,7 @@
   function enterLobby() {
     G.gen++;
     clearTimer();
+    UI.clearTurnClock();
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
@@ -906,7 +914,6 @@
       '<p>再点「出牌」确认；「提示」可循环切换可出的组合。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时会自动不要或自动出最小的一手。</p>' +
       '<p>顶栏 🗣 同时开关<b>音效与语音播报</b>：任何一方出牌都会念出牌型（对二、三带一、不要…）。</p>' +
-      '<p>若听不到任何声音，请检查设备是否处于静音状态。</p>' +
       '</div>',
       [{ text: '知道了', cls: 'gold' }]
     );
@@ -1024,6 +1031,7 @@
   function suspend() {
     G.gen++;
     clearTimer();
+    UI.clearTurnClock();
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;

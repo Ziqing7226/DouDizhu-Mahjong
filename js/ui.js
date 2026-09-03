@@ -23,7 +23,7 @@
     ['playArea', 'bottomCards', 'multBadge', 'tableCenter', 'myHand',
       'btnPlay', 'btnPass', 'btnHint', 'btnClear', 'overlay', 'dialog',
       'toast', 'counterGrid', 'infoList', 'logList', 'floatLayer',
-      'btnSound', 'btnStats', 'btnHelp', 'lobby'
+      'btnStats', 'btnHelp', 'lobby'
     ].forEach(function (id) { DOM[id] = el(id); });
     DOM.boxes = [el('box-0'), el('box-1'), el('box-2')];
     DOM.slots = {
@@ -36,19 +36,7 @@
       1: document.querySelector('.play-slot[data-seat="1"]'),
       2: document.querySelector('.play-slot[data-seat="2"]')
     };
-    // 手机端：点座位框展开/收起玩家信息（事件委托，重渲染不丢）
-    if (document.addEventListener) {
-      document.addEventListener('click', function (e) {
-        var t = e.target;
-        var box = t && t.closest ? t.closest('.player-box') : null;
-        if (!box) return;
-        for (var s = 0; s < DOM.boxes.length; s++) {
-          if (DOM.boxes[s] === box) { toggleSeatExpand(s); return; }
-        }
-      });
-    }
   }
-
   /* ---------------- 卡牌元素 ---------------- */
 
   function cardEl(card, extraCls) {
@@ -94,22 +82,17 @@
 
   /* ---------------- 玩家信息框 ---------------- */
 
-  /* 手机端座位默认折叠成头像+张数角标，点按临时展开（4 秒后自动收起），
-   * 避免信息框过大遮挡牌区（参考主流手游牌桌的做法） */
-  var seatExpandUntil = {};
-  var lastBoxArgs = {};
-
+  /* 座位框常显：头像 + 名字 + 剩牌数始终可见（手机端由 CSS 压缩为紧凑单行），
+   * 名字超长时横向省略号截断，不再「默认折叠成头像、点按临时展开」。 */
   function renderBox(seat, p, state) {
     var box = DOM.boxes[seat];
     if (!box) return;
-    lastBoxArgs[seat] = [p, state];
     var roleCls = p.role === 'landlord' ? 'role-landlord' : (p.role ? 'role-farmer' : '');
     var roleText = p.role === 'landlord' ? '地主' : (p.role === 'farmer' ? '农民' : '');
     var isActive = (state && state.activeSeat === seat);
     var isThinking = (state && state.thinkingSeat === seat);
-    var expanded = !!seatExpandUntil[seat] && seatExpandUntil[seat] > Date.now();
 
-    box.className = 'player-box' + (expanded ? ' expanded' : '') +
+    box.className = 'player-box' +
       (isActive ? ' active' : '') + (isThinking ? ' think' : '');
     box.innerHTML =
       '<div class="avatar">' + p.avatar +
@@ -125,23 +108,112 @@
       '</div>';
 
     if (seat !== 0) box.appendChild(miniBacks(p.hand.length));
+    syncTurnClock(seat);
   }
 
-  function toggleSeatExpand(seat) {
-    if (seatExpandUntil[seat]) delete seatExpandUntil[seat];
-    else seatExpandUntil[seat] = Date.now() + 4000;
-    var args = lastBoxArgs[seat];
-    if (args) renderBox(seat, args[0], args[1]);
-    if (seatExpandUntil[seat]) {
-      setTimeout(function () {
-        if (seatExpandUntil[seat] && seatExpandUntil[seat] <= Date.now()) {
-          delete seatExpandUntil[seat];
-          var a = lastBoxArgs[seat];
-          if (a) renderBox(seat, a[0], a[1]);
-        }
-      }, 4200);
+  /* ---------------- 回合倒计时环 ----------------
+   * 行动方头像外圈的 30 秒进度环 + 秒数角标（对标主流斗地主）。
+   * 数据由游戏层驱动：setTurnClock 锚定起点，clearTurnClock 在行动后撤销；
+   * 这里只负责画——每秒根据截止时刻换算剩余，环用 CSS 过渡平滑消耗。
+   * AI 的 30 秒是装饰性的（它 1~3 秒就会出牌，环提前消失）。 */
+
+  var CLOCK_C = (2 * Math.PI * 27).toFixed(3);   // viewBox r=27 的周长
+  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{avatar,svg,prg,badge} }
+
+  function setTurnClock(seat, totalSec) {
+    clearTurnClock();
+    clock = {
+      seat: seat,
+      total: totalSec,
+      endsAt: Date.now() + totalSec * 1000,
+      explicit: null,       // 人类回合由游戏每秒喂入与按钮一致的真实秒数
+      iv: null,
+      els: null
+    };
+    clock.iv = setInterval(clockTick, 1000);
+    var box = DOM.boxes[seat];
+    var avatar = box && box.querySelector('.avatar');
+    if (avatar) injectTurnClock(avatar);
+    clockTick();
+  }
+
+  /** 游戏层每秒喂入玩家真实剩余秒数，保证角标与「出牌 (N)」按钮完全同步 */
+  function tickTurnClock(leftSec) {
+    if (!clock) return;
+    clock.explicit = leftSec;
+    clockTick();
+  }
+
+  function clearTurnClock() {
+    if (!clock) return;
+    if (clock.iv) clearInterval(clock.iv);
+    if (clock.els) {
+      if (clock.els.svg) clock.els.svg.remove();
+      if (clock.els.badge) clock.els.badge.remove();
+    }
+    clock = null;
+  }
+
+  function injectTurnClock(avatar) {
+    if (!clock) return;
+    if (clock.els) {   // 上一份元素可能还挂在别的头像上，先摘掉
+      if (clock.els.svg) clock.els.svg.remove();
+      if (clock.els.badge) clock.els.badge.remove();
+    }
+    var svgNS = 'http://www.w3.org/2000/svg';
+    var mkSVG = document.createElementNS
+      ? function (t) { return document.createElementNS(svgNS, t); }
+      : function (t) { return document.createElement(t); };   // 无 DOM 桩兜底
+
+    var svg = mkSVG('svg');
+    svg.setAttribute('viewBox', '0 0 60 60');
+    svg.setAttribute('class', 'turn-ring');
+    var trk = mkSVG('circle');
+    trk.setAttribute('cx', '30'); trk.setAttribute('cy', '30'); trk.setAttribute('r', '27');
+    trk.setAttribute('class', 'trk');
+    var prg = mkSVG('circle');
+    prg.setAttribute('cx', '30'); prg.setAttribute('cy', '30'); prg.setAttribute('r', '27');
+    prg.setAttribute('class', 'prg');
+    prg.style.strokeDasharray = CLOCK_C;
+    prg.style.strokeDashoffset = '0';
+    svg.appendChild(trk);
+    svg.appendChild(prg);
+
+    var badge = document.createElement('span');
+    badge.setAttribute('class', 'turn-sec');
+
+    avatar.appendChild(svg);
+    avatar.appendChild(badge);
+    clock.els = { avatar: avatar, svg: svg, prg: prg, badge: badge };
+    clockTick();
+  }
+
+  function clockTick() {
+    if (!clock) return;
+    var left = (clock.endsAt - Date.now()) / 1000;
+    if (left < 0) left = 0;
+    var frac = clock.total > 0 ? left / clock.total : 0;
+    if (clock.els && clock.els.prg) {
+      clock.els.prg.style.strokeDashoffset = (CLOCK_C * (1 - frac)).toFixed(1);
+    }
+    if (clock.els && clock.els.badge) {
+      var v = (clock.explicit != null) ? clock.explicit : Math.ceil(left - 0.001);
+      if (v < 0) v = 0;
+      clock.els.badge.textContent = String(v);
+      clock.els.badge.classList.toggle('low', v <= 5 && clock.explicit != null);
     }
   }
+
+  /** renderBox 每次整体重绘头像后调用：倒计时还挂着就得把环重新补上 */
+  function syncTurnClock(seat) {
+    if (!clock || clock.seat !== seat) return;
+    var box = DOM.boxes[seat];
+    var avatar = box && box.querySelector('.avatar');
+    if (!avatar) return;
+    if (clock.els && clock.els.avatar === avatar && avatar.querySelector('.turn-ring')) return;
+    injectTurnClock(avatar);
+  }
+
 
   /* ---------------- 手牌 ---------------- */
 
@@ -531,7 +603,8 @@
     addDialogCloseHandler: addDialogCloseHandler,
     setDialogCloseHandler: setDialogCloseHandler,
     showLobby: showLobby, hideLobby: hideLobby,
-    setActions: setActions, setHintVisible: setHintVisible
+    setActions: setActions, setHintVisible: setHintVisible,
+    setTurnClock: setTurnClock, tickTurnClock: tickTurnClock, clearTurnClock: clearTurnClock
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);

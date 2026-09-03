@@ -28,17 +28,7 @@
     ].forEach(function (id) { DOM[id] = el(id); });
     DOM.boxes = [el('mjBox-0'), el('mjBox-1'), el('mjBox-2'), el('mjBox-3')];
     DOM.rivers = [el('mjRiver-0'), el('mjRiver-1'), el('mjRiver-2'), el('mjRiver-3')];
-    // 手机端：点座位框展开/收起玩家信息（事件委托，重渲染不丢）
-    if (document.addEventListener) {
-      document.addEventListener('click', function (e) {
-        var t = e.target;
-        var box = t && t.closest ? t.closest('.mj-seat') : null;
-        if (!box) return;
-        for (var s = 0; s < DOM.boxes.length; s++) {
-          if (DOM.boxes[s] === box) { toggleSeatExpand(s); return; }
-        }
-      });
-    }
+    DOM.melds = [el('mjMelds-0'), el('mjMelds-1'), el('mjMelds-2'), el('mjMelds-3')];
   }
 
   /* ---------------- 牌元素 ---------------- */
@@ -189,21 +179,16 @@
 
   var WIND = ['东', '南', '西', '北'];
 
-  /* 手机端座位默认折叠成头像+张数角标，点按临时展开（4 秒后自动收起） */
-  var seatExpandUntil = {};
-  var lastSeatArgs = {};
-
+  /* 座位框常显：头像 + 名字 + 剩牌数 + 副露始终可见（手机端由 CSS 压缩，
+   * 名字超长时横向省略号截断，不再「默认折叠成头像、点按临时展开」） */
   function renderSeat(seat, p, state) {
     var box = DOM.boxes[seat];
     if (!box) return;
-    lastSeatArgs[seat] = [p, state];
     var isActive = state && state.activeSeat === seat;
     var isThinking = state && state.thinkingSeat === seat;
     var wind = WIND[(seat - (state ? state.dealer : 0) + 4) % 4];   // 相对庄家的风位显示
-    var expanded = !!seatExpandUntil[seat] && seatExpandUntil[seat] > Date.now();
 
     box.className = 'mj-seat mj-seat-' + seat +
-      (expanded ? ' expanded' : '') +
       (isActive ? ' active' : '') + (isThinking ? ' think' : '');
     box.innerHTML =
       '<div class="avatar">' + p.avatar +
@@ -214,23 +199,116 @@
       (state && state.dealer === seat ? ' <span class="dealer-tag">庄</span>' : '') +
       '</div>' +
       '<div class="p-meta">' + wind + '位 · 剩 <b>' + p.hand.length + '</b> 张</div>' +
-      '</div>' + meldsHtml(p.melds);
+      '</div>';
+    syncTurnClock(seat);
   }
 
-  function toggleSeatExpand(seat) {
-    if (seatExpandUntil[seat]) delete seatExpandUntil[seat];
-    else seatExpandUntil[seat] = Date.now() + 4000;
-    var args = lastSeatArgs[seat];
-    if (args) renderSeat(seat, args[0], args[1]);
-    if (seatExpandUntil[seat]) {
-      setTimeout(function () {
-        if (seatExpandUntil[seat] && seatExpandUntil[seat] <= Date.now()) {
-          delete seatExpandUntil[seat];
-          var a = lastSeatArgs[seat];
-          if (a) renderSeat(seat, a[0], a[1]);
-        }
-      }, 4200);
+  /** 副露条：四家副露各自贴在牌河末端（不再塞进座位框），归谁的一目了然 */
+  function renderMelds(seat, melds) {
+    var strip = DOM.melds && DOM.melds[seat];
+    if (!strip) return;
+    strip.innerHTML = meldsHtml(melds);
+  }
+
+  /* ---------------- 回合倒计时环 ----------------
+   * 行动方头像外圈的 30 秒进度环 + 秒数角标，与斗地主共用一套视觉。
+   * 游戏层 setTurnClock 锚定 / clearTurnClock 撤销；这里只负责画。 */
+
+  var CLOCK_C = (2 * Math.PI * 27).toFixed(3);   // viewBox r=27 的周长
+  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{avatar,svg,prg,badge} }
+
+  function setTurnClock(seat, totalSec) {
+    clearTurnClock();
+    clock = {
+      seat: seat,
+      total: totalSec,
+      endsAt: Date.now() + totalSec * 1000,
+      explicit: null,       // 我方回合由游戏每秒喂入与按钮一致的真实秒数
+      iv: null,
+      els: null
+    };
+    clock.iv = setInterval(clockTick, 1000);
+    var box = DOM.boxes[seat];
+    var avatar = box && box.querySelector('.avatar');
+    if (avatar) injectTurnClock(avatar);
+    clockTick();
+  }
+
+  /** 游戏层每秒喂入我方真实剩余秒数 */
+  function tickTurnClock(leftSec) {
+    if (!clock) return;
+    clock.explicit = leftSec;
+    clockTick();
+  }
+
+  function clearTurnClock() {
+    if (!clock) return;
+    if (clock.iv) clearInterval(clock.iv);
+    if (clock.els) {
+      if (clock.els.svg) clock.els.svg.remove();
+      if (clock.els.badge) clock.els.badge.remove();
     }
+    clock = null;
+  }
+
+  function injectTurnClock(avatar) {
+    if (!clock) return;
+    if (clock.els) {   // 上一份元素可能还挂在别的头像上，先摘掉
+      if (clock.els.svg) clock.els.svg.remove();
+      if (clock.els.badge) clock.els.badge.remove();
+    }
+    var svgNS = 'http://www.w3.org/2000/svg';
+    var mkSVG = document.createElementNS
+      ? function (t) { return document.createElementNS(svgNS, t); }
+      : function (t) { return document.createElement(t); };   // 无 DOM 桩兜底
+
+    var svg = mkSVG('svg');
+    svg.setAttribute('viewBox', '0 0 60 60');
+    svg.setAttribute('class', 'turn-ring');
+    var trk = mkSVG('circle');
+    trk.setAttribute('cx', '30'); trk.setAttribute('cy', '30'); trk.setAttribute('r', '27');
+    trk.setAttribute('class', 'trk');
+    var prg = mkSVG('circle');
+    prg.setAttribute('cx', '30'); prg.setAttribute('cy', '30'); prg.setAttribute('r', '27');
+    prg.setAttribute('class', 'prg');
+    prg.style.strokeDasharray = CLOCK_C;
+    prg.style.strokeDashoffset = '0';
+    svg.appendChild(trk);
+    svg.appendChild(prg);
+
+    var badge = document.createElement('span');
+    badge.setAttribute('class', 'turn-sec');
+
+    avatar.appendChild(svg);
+    avatar.appendChild(badge);
+    clock.els = { avatar: avatar, svg: svg, prg: prg, badge: badge };
+    clockTick();
+  }
+
+  function clockTick() {
+    if (!clock) return;
+    var left = (clock.endsAt - Date.now()) / 1000;
+    if (left < 0) left = 0;
+    var frac = clock.total > 0 ? left / clock.total : 0;
+    if (clock.els && clock.els.prg) {
+      clock.els.prg.style.strokeDashoffset = (CLOCK_C * (1 - frac)).toFixed(1);
+    }
+    if (clock.els && clock.els.badge) {
+      var v = (clock.explicit != null) ? clock.explicit : Math.ceil(left - 0.001);
+      if (v < 0) v = 0;
+      clock.els.badge.textContent = String(v);
+      clock.els.badge.classList.toggle('low', v <= 5 && clock.explicit != null);
+    }
+  }
+
+  /** renderSeat 每次整体重绘座位后调用：倒计时还挂着就得把环重新补上 */
+  function syncTurnClock(seat) {
+    if (!clock || clock.seat !== seat) return;
+    var box = DOM.boxes[seat];
+    var avatar = box && box.querySelector('.avatar');
+    if (!avatar) return;
+    if (clock.els && clock.els.avatar === avatar && avatar.querySelector('.turn-ring')) return;
+    injectTurnClock(avatar);
   }
 
   function meldsHtml(melds) {
@@ -277,15 +355,22 @@
     var w = DOM.rivers[seat];
     if (!w) return;
     w.innerHTML = '';
-    // 牌河只展示最近 20 张（5×4），避免遮挡其他区域
-    tiles.slice(-20).forEach(function (t) {
+    // 定格最近 18 张（6×3）：面积恒定，杜绝堆叠与外溢（更早的弃牌不再展示）
+    // 牌面朝向由 CSS 按河位统一旋转（全部头朝桌心，各家读起来是正的）。
+    var vertical = (seat === 1 || seat === 3);
+    tiles.slice(-18).forEach(function (t) {
       var d = tileEl(t, t.id === lastId ? 'last' : '');
-      w.appendChild(d);
+      if (!vertical) { w.appendChild(d); return; }
+      var cell = document.createElement('div');
+      cell.className = 'rv-cell';
+      cell.appendChild(d);
+      w.appendChild(cell);
     });
   }
 
-  function renderWall(n) {
-    DOM.mjWallInfo.textContent = '牌墙余 ' + n + ' 张';
+  function renderWall(n, rounds) {
+    DOM.mjWallInfo.textContent = '牌墙余 ' + n + ' 张' +
+      (rounds ? ' · 第 ' + rounds + ' 巡' : '');
   }
 
   /* ---------------- 气泡 ---------------- */
@@ -390,10 +475,12 @@
     renderSeat: renderSeat, renderHand: renderHand, dealAnimation: dealAnimation,
     setTileClickHandler: setTileClickHandler,
     renderRiver: renderRiver, renderWall: renderWall,
+    renderMelds: renderMelds,
     bubble: bubble, clearBubbles: clearBubbles,
     renderCounter: renderCounter, renderInfo: renderInfo,
     renderScore: renderScore, renderLogs: renderLogs,
     setActions: setActions, setHintVisible: setHintVisible,
+    setTurnClock: setTurnClock, tickTurnClock: tickTurnClock, clearTurnClock: clearTurnClock,
     showLobby: showLobby, hideLobby: hideLobby, highlightRooms: highlightRooms,
     G: G
   };
