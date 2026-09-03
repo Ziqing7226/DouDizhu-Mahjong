@@ -90,10 +90,9 @@ AI 三档难度：新手（出牌随意）→ 高手（记牌推算 + 残局推�
 │   ├── ui.js               斗地主渲染层
 │   ├── audio.js            WebAudio 实时合成音效
 │   ├── music.js            WebAudio 合成背景音乐
-│   ├── voice.js            语音播报（自动适配设备语音能力）
-│   ├── storage.js          战绩与偏好存档（localStorage）
-│   ├── mobile.js           移动端适配
-│   └── vendor/             meSpeak 本地语音合成（懒加载）
+│   ├── voice.js            语音播报（系统 TTS 中文路由 + 语义音效兜底）
+│   ├── storage.js           战绩与偏好存档（localStorage）
+│   └── mobile.js           移动端适配
 └── tests/                  规则回归 + 无浏览器端到端 + AI 强度工具
 ```
 

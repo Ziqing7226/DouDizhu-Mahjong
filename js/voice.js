@@ -3,22 +3,29 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * 本程序为自由软件：你可以在 GNU 通用公共许可证第 3 版（或按你的选择，
- * 任何更高版本，由自由软件基金会发布）条款下重新分发和/或修改它。
+ * 任何更高版本）条款下重新分发和/或修改它。
  * 许可证全文见仓库根目录的 LICENSE 文件。
  */
 
 /* ==========================================================================
- * voice.js —— 出牌语音播报（三层引擎兜底）
+ * voice.js —— 出牌语音播报（两级引擎 + 严格中文路由）
  *
- * 1. 系统 TTS（Web Speech API）：Edge / 桌面 Chrome / iOS Safari 等
- *    有中文语音引擎时使用，音色最自然。
- *    兼容修复：首次用户手势预热解锁（部分安卓需先 speak 过一次）、
- *    voiceschanged 异步音色重挑、队列积压丢弃。
- * 2. meSpeak（本地 JS 合成，js/vendor/，约 1.7MB 懒加载）：
- *    系统 TTS 不可用（部分安卓 / 鸿蒙等无 TTS 引擎的浏览器）时加载，
- *    任何支持 WebAudio 的浏览器都能"说中文"，音色偏机械。
- * 3. 语义音效（audio.js 实时合成）：前两层都失败时，每个事件用
- *    独立辨识音（叫分叮、对子双击、炸弹轰、胡牌锣……），零依赖全平台可用。
+ * 1. 系统 TTS（Web Speech API）：
+ *    a) 检测到中文音色 → 显式指定音色播报（音质最好，可分男女声）；
+ *    b) 音色列表为空（安卓 Chrome 平台特性：getVoices() 常返回空列表，
+ *       但设置 utterance.lang='zh-CN' 后系统会路由到自带中文引擎）
+ *       → 「lang-only」模式播报，仍由系统 TTS 发标准普通话。
+ *    音色列表异步就绪（voiceschanged）后自动升级 / 恢复到 a)。
+ * 2. 语义音效（audio.js 实时合成）：浏览器完全没有 speechSynthesis 时，
+ *    每个事件用独立辨识音（叫分叮、对子双击、炸弹轰、胡牌锣……）。
+ *
+ * 历史教训（为什么不再用 meSpeak/eSpeak 本地合成）：
+ *   eSpeak 的中文是共振峰合成，四声渲染缺失、双元音断裂
+ *   （espeak-ng #1370/#1028/#1275），在手机上听感近似乱码，
+ *   且其同步合成阻塞主线程——曾导致安卓端「播报即卡顿」。
+ *   参数调优无法修复引擎级缺陷，故整层移除。
+ *
+ * 防乱码铁律：中文文本绝不交给非中文音色（宁可不出声也不出怪音）。
  *
  * iPad / iOS 注意：系统静音键（侧边开关）会屏蔽 WebAudio 与 TTS，
  * 属硬件行为，代码无法绕过，请检查静音键。
@@ -30,10 +37,10 @@
   var ttsSupported = !!(synth && global.SpeechSynthesisUtterance);
   var enabled = true;
 
-  /* 引擎状态：'tts' → 'mespeak' → 'sfx'（自动逐层降级，最终稳定） */
-  var engine = ttsSupported ? 'tts' : 'boot';
-  var ttsVoicesReady = false;    // 系统 TTS 是否确认有可用音色
-  var mespeakState = 'idle';     // idle | loading | ready | failed
+  /* 引擎状态：'tts'（有中文音色）→ 'tts-lang'（有 synth、音色列表空，靠 lang 路由）
+   * → 'sfx'（无 speechSynthesis）。voiceschanged 晚到时可从下往上恢复。 */
+  var engine = ttsSupported ? 'tts-lang' : 'sfx';
+  var ttsVoicesReady = false;    // 是否确认有可用中文音色
 
   /* ---- 音色挑选：各家引擎的中文音色命名不统一，按名字猜男女 ---- */
   var MALE_RE = /yunxi|yunjian|yunyang|yunye|kangkang|liang|male|男声|康康|云健|云希|云扬/i;
@@ -45,11 +52,14 @@
     if (!ttsSupported) return;
     var list;
     try { list = synth.getVoices() || []; } catch (e) { return; }
-    if (!list.length) return;                    // 还没就绪 / 无引擎
+    // 只认中文音色：lang 以 zh 开头，或名字带 Chinese/中文/普通话。
+    // 绝不退而求其次用非中文音色念汉字（那就是「乱码」的第二条来源）。
     var zh = list.filter(function (v) {
-      return /^zh/i.test(v.lang || '') || /Chinese|中文|普通话/.test(v.name || '');
+      return /^zh/i.test(v.lang || '') || /Chinese|中文|普通话/i.test(v.name || '');
     });
-    if (!zh.length) zh = list;
+    if (!zh.length) return;                      // 列表空 / 只有外文音色 → 保持现状
+    // 优先本地音色（离线可用、不依赖 Google 网络音色的静默失败）
+    zh.sort(function (a, b) { return (b.localService ? 1 : 0) - (a.localService ? 1 : 0); });
     voices.male = null; voices.female = null; voices.any = zh[0] || null;
     for (var i = 0; i < zh.length; i++) {
       var nm = zh[i].name || '';
@@ -68,6 +78,8 @@
       (voices.female && voices.male.name === voices.female.name);
     if (!voices.male) voices.male = voices.female;
     ttsVoicesReady = true;
+    // 晚到的音色列表：从 lang-only / 音效层恢复到最佳层
+    if (engine !== 'tts') engine = 'tts';
   }
   if (ttsSupported) {
     pickVoices();
@@ -81,11 +93,13 @@
 
   /* ---------------- 第一层：系统 TTS ---------------- */
 
-  var queueCount = 0;   // 待播计数（队列积压时丢弃旧播报，保持节奏）
+  var queueCount = 0;       // 待播计数（队列积压时丢弃旧播报，保持节奏）
+  var lastQueueAt = 0;      // 部分安卓 onend 永不回调 → 计数会泄漏，按时间兜底复位
 
   function ttsSpeak(text, gender, excitement) {
     try {
-      if (queueCount >= 2) {
+      var now = Date.now();
+      if (queueCount >= 2 || now - lastQueueAt > 8000) {
         try { synth.cancel(); } catch (e) { /* 忽略 */ }
         queueCount = 0;
       }
@@ -94,8 +108,13 @@
       var sameVoice = isMale && voices.maleIsFemale;
       var v = isMale ? voices.male : (voices.female || voices.any);
       var u = new global.SpeechSynthesisUtterance(text);
-      if (v) { u.voice = v; u.lang = v.lang || 'zh-CN'; }
-      else { u.lang = 'zh-CN'; }
+      if (ttsVoicesReady && v) {
+        u.voice = v;
+        u.lang = v.lang || 'zh-CN';
+      } else {
+        // lang-only：安卓 Chrome 音色列表为空时，靠系统按语言路由中文引擎
+        u.lang = 'zh-CN';
+      }
       // 轻快的打牌情绪：语速略快，音高按性别微调并带随机起伏，避免机械感
       u.rate = (sameVoice ? 1.0 : 1.15) + Math.random() * 0.1 + (excitement ? 0.05 : 0);
       u.pitch = (sameVoice ? 0.6 : (isMale ? 0.95 : 1.15)) +
@@ -103,123 +122,27 @@
       u.volume = 1;
       u.onend = u.onerror = function () { if (queueCount > 0) queueCount--; };
       queueCount++;
+      lastQueueAt = now;
       synth.speak(u);
     } catch (e) { /* 播报失败不影响游戏 */ }
   }
 
   /**
-   * 首次用户手势时调用：
-   * 1) 预热系统 TTS —— 部分安卓浏览器必须先在人手势内 speak 过一次才出声；
-   * 2) 若 2.5s 后仍没有任何可用音色（无 TTS 引擎的浏览器），降级到 meSpeak。
+   * 首次用户手势时调用：预热系统 TTS ——
+   * 部分安卓浏览器必须先在人手势内 speak 过一次才出声。
    */
   function warmup() {
-    if (!ttsSupported) { escalate(); return; }
+    if (!ttsSupported) return;
     pickVoices();
     try {
       var u = new global.SpeechSynthesisUtterance(' ');
       u.volume = 0;
+      u.lang = 'zh-CN';
       synth.speak(u);
     } catch (e) { /* 忽略 */ }
-    // 给异步音色列表一点时间，仍为空 → 无引擎 → 降级
-    setTimeout(function () {
-      pickVoices();
-      if (!ttsVoicesReady) escalate();
-    }, 2500);
   }
 
-  /* ---------------- 第二层：meSpeak 本地合成 ---------------- */
-
-  var MS_BASE = 'js/vendor/';
-
-  function escalate() {
-    // 已就绪直接启用；加载中就等它（poll 由首次加载驱动）
-    if (mespeakState === 'ready') { engine = 'mespeak'; return; }
-    if (mespeakState === 'loading') { engine = 'boot'; return; }
-    if (engine === 'sfx' && mespeakState === 'failed') return;   // 试过且失败，留在音效层
-    mespeakState = 'loading';
-    loadScript(MS_BASE + 'mespeak.js', function (ok) {
-      if (!ok) return mespeakFail();
-      var ms = global.meSpeak;
-      if (!ms) return mespeakFail();
-      // v1.9.6 同步 API：loadConfig/loadVoice 直接吃 JSON 对象，无需轮询
-      Promise.all([
-        fetch(MS_BASE + 'mespeak_config.json').then(function (r) { return r.json(); }),
-        fetch(MS_BASE + 'mespeak-zh.json').then(function (r) { return r.json(); })
-      ]).then(function (arr) {
-        ms.loadConfig(arr[0]);
-        ms.loadVoice(arr[1]);
-        // 能力探测：真合成一小段，拿到非空 WAV 字节才算就绪
-        var probe = ms.speak('好', { rawdata: 'arraybuffer', voice: 'zh', amplitude: 170 });
-        if (!probe || probe.byteLength < 200) return mespeakFail();
-        mespeakState = 'ready';
-        engine = 'mespeak';
-      }).catch(function () { mespeakFail(); });
-    });
-  }
-
-  function mespeakFail() {
-    mespeakState = 'failed';
-    engine = 'sfx';   // 第三层：语义音效
-  }
-
-  function loadScript(src, done) {
-    var s = document.createElement('script');
-    s.src = src;
-    s.onload = function () { done(true); };
-    s.onerror = function () { done(false); };
-    (document.head || document.getElementsByTagName('head')[0]).appendChild(s);
-  }
-
-  /**
-   * 合成播报：meSpeak 同步产出 WAV 字节，再经由我们「已解锁」的
-   * WebAudio 上下文播放 —— 不依赖 meSpeak 自带的（在懒加载场景下
-   * 会被浏览器自动播放策略挂起的）音频上下文，全平台保证出声。
-   */
-  function mespeakSpeak(text, gender, excitement) {
-    try {
-      // 清洗文本：全角标点/空白会被合成引擎念成杂音，全部去掉
-      var clean = String(text).replace(/[！!？?，,。.～~、：:；;「」()\[\]（）\s]+/g, '');
-      if (!clean) return;
-      var wav = global.meSpeak.speak(clean, {
-        rawdata: 'arraybuffer',
-        voice: 'zh',
-        amplitude: 175,
-        // 男声压低音高，女声略高；语速稍慢更清楚（eSpeak 中文按字读音）
-        pitch: gender === 'male' ? 30 : 56,
-        speed: 152,
-        wordgap: 1
-      });
-      if (!wav || !wav.byteLength) return;
-      playWavBytes(wav);
-    } catch (e) { /* 忽略 */ }
-  }
-
-  /** 用游戏自身的（手势解锁过的）AudioContext 播放 WAV 字节；
-   *  短语连播按时长串行排程，避免叠音 */
-  var speakUntil = 0;
-  function playWavBytes(bytes) {
-    var ac = global.Sound && global.Sound.getRawContext ? global.Sound.getRawContext() : null;
-    if (!ac) return;
-    var done = function (buf) {
-      try {
-        var src = ac.createBufferSource();
-        src.buffer = buf;
-        var gain = ac.createGain();
-        gain.gain.value = 0.9;
-        src.connect(gain);
-        gain.connect(ac.destination);
-        var at = Math.max(ac.currentTime, speakUntil);
-        src.start(at);
-        speakUntil = at + buf.duration + 0.05;
-      } catch (e) { /* 忽略 */ }
-    };
-    try {
-      var p = ac.decodeAudioData(bytes, done, function () { });
-      if (p && p.then) p.then(done, function () { });
-    } catch (e) { /* 忽略 */ }
-  }
-
-  /* ---------------- 第三层：语义音效 ---------------- */
+  /* ---------------- 第二层：语义音效 ---------------- */
 
   /** 事件 → 辨识音（audio.js 合成，零依赖） */
   function cueFor(text, gender, cue) {
@@ -262,16 +185,11 @@
 
   function speak(text, gender, excitement, cue) {
     if (!enabled || !text) return;
-    if (engine === 'tts') {
-      if (ttsVoicesReady) ttsSpeak(text, gender, excitement);
-      // 音色未就绪期间静默跳过（warmup 很快会完成）
+    if (engine === 'tts' || engine === 'tts-lang') {
+      ttsSpeak(text, gender, excitement);
       return;
     }
-    if (engine === 'mespeak' && mespeakState === 'ready') {
-      mespeakSpeak(text, gender, excitement);
-      return;
-    }
-    cueFor(text, gender, cue);   // 第三层：语义音效
+    cueFor(text, gender, cue);   // 第二层：语义音效
   }
 
   /** 每个座位固定一种音色：斗地主（3 家）与麻将（4 家）通用，相邻座位不同声 */
@@ -322,7 +240,6 @@
     enabled = !!v;
     if (!enabled) {
       try { synth && synth.cancel(); } catch (e) { /* 忽略 */ }
-      try { global.meSpeak && global.meSpeak.stop(); } catch (e) { /* 忽略 */ }
     }
   }
   function isEnabled() { return enabled; }
@@ -331,7 +248,7 @@
   function engineInfo() {
     return {
       engine: engine,
-      tts: ttsSupported, ttsVoices: ttsVoicesReady, mespeak: mespeakState
+      tts: ttsSupported, ttsVoices: ttsVoicesReady
     };
   }
 

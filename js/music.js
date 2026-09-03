@@ -264,6 +264,13 @@
     var pat = PATTERNS[mood];
     var stepDur = 60 / pat.bpm / 2;
     var now = ac.currentTime;
+    // 音频上下文被系统挂起又恢复（如调整音量、锁屏）后，调度时钟可能已落后
+    // 现实很多 —— 重同步到当下，而不是把一堆「过去」的音符瞬间全部触发
+    // （那会造成节点风暴与卡顿，且状态会一直坏到刷新页面为止）。
+    if (nextTime < now - 0.25) {
+      nextTime = now + 0.05;
+      step = Math.round(step / pat.stepsPerBar) * pat.stepsPerBar;   // 对齐小节，旋律不突兀
+    }
     while (nextTime < now + LOOKAHEAD) {
       var evs = pat.events[step % pat.loopSteps];
       if (evs) for (var i = 0; i < evs.length; i++) playEvent(evs[i], nextTime);
