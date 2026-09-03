@@ -25,6 +25,7 @@
         <span class="logo" id="logoText">斗地主</span>
       </div>
       <div class="topbar-right">
+        <button class="icon-btn" id="btnFullscreen" title="全屏 / 退出全屏">⛶</button>
         <button class="icon-btn" id="btnMusic" title="背景音乐开关">🎵</button>
         <input type="range" class="vol-slider" id="volMusic" min="0" max="100" value="40" title="音乐音量">
         <button class="icon-btn" id="btnVoice" title="语音播报开关">🗣</button>
@@ -238,6 +239,14 @@
     <div class="rh-icon">📱</div>
     <div class="rh-text">请横屏游玩</div>
     <div class="rh-sub">转动手机，获得完整的牌桌视野</div>
+  </div>
+
+  <!-- ============ 移动端全屏建议条 ============ -->
+  <div class="fs-banner" id="fsBanner">
+    <span class="fs-msg">⛶ 全屏体验更佳</span>
+    <button class="btn sm gold" id="btnFsGo">进入全屏</button>
+    <button class="fs-close" id="btnFsClose" title="不再提示">×</button>
+    <div class="fs-tip">若无效：浏览器菜单 →「全屏模式」或「添加到主屏幕」</div>
   </div>
 
   <script src="js/cards.js"></script>

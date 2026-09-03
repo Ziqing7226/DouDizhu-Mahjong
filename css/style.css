@@ -106,6 +106,50 @@ body {
   55%, 100% { transform: rotate(90deg); }
 }
 
+/* ---------------- 全屏建议条（仅移动端横屏且未全屏时出现） ---------------- */
+
+.fs-banner {
+  display: none;
+  position: fixed;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(20, 8, 6, .92);
+  border: 1px solid var(--gold);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .5);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold-lt);
+  max-width: 92vw;
+}
+.fs-banner.show { display: flex; }
+.fs-banner .fs-msg { white-space: nowrap; }
+.fs-banner .fs-close {
+  border: none;
+  background: transparent;
+  color: #bfae90;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.fs-banner .fs-tip {
+  display: none;            /* 首次点击无效后再显示指引 */
+  flex-basis: 100%;
+  font-size: 11px;
+  font-weight: 400;
+  color: #d8c8a8;
+  opacity: .85;
+  white-space: normal;
+}
+.fs-banner.show-tip { flex-wrap: wrap; }
+.fs-banner.show-tip .fs-tip { display: block; }
+
 /* ---------------- 整体布局 ---------------- */
 
 #app {

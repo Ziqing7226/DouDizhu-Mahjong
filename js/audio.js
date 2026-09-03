@@ -35,9 +35,38 @@
     return ctx;
   }
 
+  /** iOS / iPadOS 需要「在手势内播放一次真实声源」才算真正解锁：
+   *  仅 resume() 在部分版本上不够。播放一段 50ms 静音 buffer 完成解锁。 */
+  var unlocked = false;
+  function unlockWithSilence() {
+    if (unlocked || !ctx) return;
+    try {
+      var src = ctx.createBufferSource();
+      var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.05), ctx.sampleRate);
+      src.buffer = buf;   // 全零 = 静音
+      src.connect(ctx.destination);
+      src.start(0);
+      unlocked = true;
+    } catch (e) { /* 忽略 */ }
+  }
+
   function resume() {
     init();
-    if (ctx && ctx.state === 'suspended') ctx.resume();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      try {
+        var p = ctx.resume();
+        if (p && p.then) p.then(unlockWithSilence, function () { });
+      } catch (e) { /* 忽略 */ }
+    }
+    unlockWithSilence();
+  }
+
+  // 回到前台 / 任意触摸都尝试恢复（iOS 锁屏后会重新挂起上下文）
+  if (global.document && global.document.addEventListener) {
+    global.document.addEventListener('visibilitychange', function () {
+      if (!global.document.hidden) resume();
+    });
   }
 
   function setEnabled(v) {
@@ -174,6 +203,52 @@
     /** 倒计时紧迫 */
     warn: function () {
       tone({ freq: 1000, to: 700, dur: 0.12, vol: 0.14, type: 'square' });
+    },
+
+    /* ------ 语音播报第三层兜底：语义辨识音（无 TTS 引擎时替代人声） ------ */
+    /** 通用出牌 */
+    vPlay: function () {
+      noise({ freq: 2600, to: 500, dur: 0.12, vol: 0.16, filter: 'bandpass' });
+    },
+    /** 单张：一声轻快 */
+    vSingle: function () {
+      tone({ freq: 740, to: 980, dur: 0.09, vol: 0.16, type: 'triangle' });
+    },
+    /** 对子：双击 */
+    vPair: function () {
+      tone({ freq: 660, dur: 0.07, vol: 0.15, type: 'triangle' });
+      tone({ freq: 880, dur: 0.09, vol: 0.15, type: 'triangle', delay: 0.08 });
+    },
+    /** 三张 / 三带：三连升 */
+    vTriple: function () {
+      var f = [600, 760, 940];
+      for (var i = 0; i < 3; i++) tone({ freq: f[i], dur: 0.08, vol: 0.15, type: 'triangle', delay: i * 0.075 });
+    },
+    /** 顺子 / 连对 / 飞机：快速琶音 */
+    vStraight: function () {
+      var f = [520, 620, 740, 880, 1040];
+      for (var i = 0; i < 5; i++) tone({ freq: f[i], dur: 0.07, vol: 0.13, type: 'triangle', delay: i * 0.055 });
+    },
+    /** 叫地主：小号角 */
+    vLandlord: function () {
+      var f = [523, 659, 784];
+      for (var i = 0; i < 3; i++) tone({ freq: f[i], dur: 0.16, vol: 0.17, type: 'square', delay: i * 0.1 });
+    },
+    /** 麻将胡牌：锣声 + 欢庆 */
+    vHu: function () {
+      tone({ freq: 196, to: 185, dur: 1.1, vol: 0.3, type: 'sine' });
+      tone({ freq: 392, to: 370, dur: 0.9, vol: 0.14, type: 'triangle' });
+      chord([784, 988, 1175], { dur: 0.5, delay: 0.25, stagger: 0.07, vol: 0.15 });
+    },
+    /** 麻将杠：两记闷响 */
+    vGang: function () {
+      tone({ freq: 150, to: 70, dur: 0.22, vol: 0.3, type: 'sawtooth' });
+      tone({ freq: 120, to: 55, dur: 0.3, vol: 0.3, type: 'sine', delay: 0.16 });
+    },
+    /** 麻将碰/吃：清脆叮咚 */
+    vClaim: function () {
+      tone({ freq: 880, dur: 0.08, vol: 0.16, type: 'sine' });
+      tone({ freq: 660, dur: 0.12, vol: 0.16, type: 'sine', delay: 0.09 });
     }
   };
 

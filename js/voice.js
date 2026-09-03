@@ -1,4 +1,4 @@
-/* 斗地主 —— 纯前端单机斗地主游戏
+/* 斗地主&麻将 · 棋牌合集 —— 纯前端单机游戏
  * Copyright (C) 2026 Ziqing7226
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
@@ -8,28 +8,45 @@
  */
 
 /* ==========================================================================
- * voice.js —— 出牌语音播报（Web Speech API）
- * 任何一方叫分 / 叫地主 / 加倍 / 出牌 / 不要时用男声或女声念出来。
- * 语速略快、音高带随机起伏，营造轻快的打牌情绪。
- * 浏览器不支持 speechSynthesis 时整体静默降级，不影响游戏。
+ * voice.js —— 出牌语音播报（三层引擎兜底）
+ *
+ * 1. 系统 TTS（Web Speech API）：Edge / 桌面 Chrome / iOS Safari 等
+ *    有中文语音引擎时使用，音色最自然。
+ *    兼容修复：首次用户手势预热解锁（部分安卓需先 speak 过一次）、
+ *    voiceschanged 异步音色重挑、队列积压丢弃。
+ * 2. meSpeak（本地 JS 合成，js/vendor/，约 1.7MB 懒加载）：
+ *    系统 TTS 不可用（部分安卓 / 鸿蒙等无 TTS 引擎的浏览器）时加载，
+ *    任何支持 WebAudio 的浏览器都能"说中文"，音色偏机械。
+ * 3. 语义音效（audio.js 实时合成）：前两层都失败时，每个事件用
+ *    独立辨识音（叫分叮、对子双击、炸弹轰、胡牌锣……），零依赖全平台可用。
+ *
+ * iPad / iOS 注意：系统静音键（侧边开关）会屏蔽 WebAudio 与 TTS，
+ * 属硬件行为，代码无法绕过，请检查静音键。
  * ========================================================================== */
 (function (global) {
   'use strict';
 
   var synth = global.speechSynthesis || null;
-  var supported = !!(synth && global.SpeechSynthesisUtterance);
+  var ttsSupported = !!(synth && global.SpeechSynthesisUtterance);
   var enabled = true;
+
+  /* 引擎状态：'tts' → 'mespeak' → 'sfx'（逐层降级，最终稳定） */
+  var engine = ttsSupported ? 'tts' : 'boot';
+  var ttsVoicesReady = false;    // 系统 TTS 是否确认有可用音色
+  var mespeakState = 'idle';     // idle | loading | ready | failed
+  var mespeakProbing = false;
 
   /* ---- 音色挑选：各家引擎的中文音色命名不统一，按名字猜男女 ---- */
   var MALE_RE = /yunxi|yunjian|yunyang|yunye|kangkang|liang|male|男声|康康|云健|云希|云扬/i;
-  var FEMALE_RE = /xiaoxiao|xiaoyi|yunxia|xiaobei|xiaoni|huihui|yaoyao|tingting|meijia|zhiping|female|女声|晓晓|惠惠|婷婷/i;
+  var FEMALE_RE = /xiaoxiao|xiaoyi|yunxia|xiaobei|xiaoni|huihui|yaoyao|tingting|meijia|zhiping|female|女声|晓晓|惠惠|婷婷|ting-ting|tingting|hui/i;
 
   var voices = { male: null, female: null, any: null, maleIsFemale: false };
 
   function pickVoices() {
-    if (!supported) return;
+    if (!ttsSupported) return;
     var list;
     try { list = synth.getVoices() || []; } catch (e) { return; }
+    if (!list.length) return;                    // 还没就绪 / 无引擎
     var zh = list.filter(function (v) {
       return /^zh/i.test(v.lang || '') || /Chinese|中文|普通话/.test(v.name || '');
     });
@@ -42,9 +59,7 @@
     }
     // 女声兜底：没匹配到就用第一个中文音色
     if (!voices.female) voices.female = voices.any;
-    // 男声兜底：系统里没有公认男声时，退而求其次——
-    // 挑一个「与女声不同名」的中文音色；一个都没有就共用女声，
-    // 但会拉开音高/语速制造反差（见 speak）
+    // 男声兜底：挑一个与女声不同名的中文音色；实在没有就共用（靠音高拉开反差）
     if (!voices.male) {
       for (var k = 0; k < zh.length; k++) {
         if ((zh[k].name || '') !== (voices.female && voices.female.name)) { voices.male = zh[k]; break; }
@@ -53,8 +68,9 @@
     voices.maleIsFemale = !voices.male ||
       (voices.female && voices.male.name === voices.female.name);
     if (!voices.male) voices.male = voices.female;
+    ttsVoicesReady = true;
   }
-  if (supported) {
+  if (ttsSupported) {
     pickVoices();
     // 音色列表多数浏览器是异步就绪的，两种监听方式都挂上
     if (typeof synth.addEventListener === 'function') {
@@ -64,7 +80,136 @@
     }
   }
 
-  /* ---- 点数 → 口头叫法（沿用民间通行的叫牌习惯：J 钩、Q 圈、A 尖） ---- */
+  /* ---------------- 第一层：系统 TTS ---------------- */
+
+  var queueCount = 0;   // 待播计数（队列积压时丢弃旧播报，保持节奏）
+
+  function ttsSpeak(text, gender, excitement) {
+    try {
+      if (queueCount >= 2) {
+        try { synth.cancel(); } catch (e) { /* 忽略 */ }
+        queueCount = 0;
+      }
+      var isMale = gender === 'male';
+      // 系统只有一个中文音色时男女共用，靠音高/语速拉开反差
+      var sameVoice = isMale && voices.maleIsFemale;
+      var v = isMale ? voices.male : (voices.female || voices.any);
+      var u = new global.SpeechSynthesisUtterance(text);
+      if (v) { u.voice = v; u.lang = v.lang || 'zh-CN'; }
+      else { u.lang = 'zh-CN'; }
+      // 轻快的打牌情绪：语速略快，音高按性别微调并带随机起伏，避免机械感
+      u.rate = (sameVoice ? 1.0 : 1.15) + Math.random() * 0.1 + (excitement ? 0.05 : 0);
+      u.pitch = (sameVoice ? 0.6 : (isMale ? 0.95 : 1.15)) +
+        (Math.random() * 0.1 - 0.05) + (excitement ? 0.1 : 0);
+      u.volume = 1;
+      u.onend = u.onerror = function () { if (queueCount > 0) queueCount--; };
+      queueCount++;
+      synth.speak(u);
+    } catch (e) { /* 播报失败不影响游戏 */ }
+  }
+
+  /**
+   * 首次用户手势时调用：
+   * 1) 预热系统 TTS —— 部分安卓浏览器必须先在人手势内 speak 过一次才出声；
+   * 2) 若 2.5s 后仍没有任何可用音色（无 TTS 引擎的浏览器），降级到 meSpeak。
+   */
+  function warmup() {
+    if (!ttsSupported) { escalate(); return; }
+    pickVoices();
+    try {
+      var u = new global.SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      synth.speak(u);
+    } catch (e) { /* 忽略 */ }
+    // 给异步音色列表一点时间，仍为空 → 无引擎 → 降级
+    setTimeout(function () {
+      pickVoices();
+      if (!ttsVoicesReady) escalate();
+    }, 2500);
+  }
+
+  /* ---------------- 第二层：meSpeak 本地合成 ---------------- */
+
+  var MS_BASE = 'js/vendor/';
+  var MS_FILES = ['mespeak.js', 'mespeak-core.js', 'mespeak_config.json', 'mespeak-zh.json'];
+
+  function escalate() {
+    if (engine === 'mespeak' || engine === 'sfx') return;
+    if (mespeakState !== 'idle' && mespeakState !== 'failed') return;
+    mespeakState = 'loading';
+    loadScript(MS_BASE + 'mespeak.js', function (ok) {
+      if (!ok) return mespeakFail();
+      var ms = global.meSpeak;
+      if (!ms) return mespeakFail();
+      // meSpeak v2.0.7 前端：loadCustomConfig 接受页面相对路径，
+      // loadVoice 只接受「相对 mespeak.js 所在目录」的文件名（传完整路径会解析成错误地址），
+      // 且回调在部分平台上不可靠 —— 统一用「发射后轮询就绪状态」驱动
+      try { ms.loadCustomConfig(MS_BASE + 'mespeak_config.json'); } catch (e) { return mespeakFail(); }
+      poll(function () {
+        try { return ms.isConfigLoaded(); } catch (e) { return false; }
+      }, 15000, function (cfgOk) {
+        if (!cfgOk) return mespeakFail();
+        try { ms.loadVoice('mespeak-zh.json'); } catch (e) { return mespeakFail(); }
+        poll(function () {
+          try { return ms.isVoiceLoaded('zh'); } catch (e) { return false; }
+        }, 15000, function (vOk) {
+          if (!vOk) return mespeakFail();
+          // 能力探测：合成一句不抛异常即认为就绪（音色已注册是必要条件）
+          try { ms.speak('好', { voice: 'zh' }); } catch (e) { return mespeakFail(); }
+          mespeakState = 'ready';
+          engine = 'mespeak';
+          mespeakProbing = false;
+        });
+      });
+    });
+  }
+
+  function mespeakFail() {
+    mespeakState = 'failed';
+    mespeakProbing = false;
+    engine = 'sfx';   // 第三层：语义音效
+  }
+
+  function loadScript(src, done) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = function () { done(true); };
+    s.onerror = function () { done(false); };
+    (document.head || document.getElementsByTagName('head')[0]).appendChild(s);
+  }
+
+  function poll(cond, timeoutMs, done) {
+    var t0 = Date.now();
+    (function step() {
+      if (cond()) return done(true);
+      if (Date.now() - t0 > timeoutMs) return done(false);
+      setTimeout(step, 300);
+    })();
+  }
+
+  function mespeakSpeak(text, gender, excitement) {
+    try {
+      global.meSpeak.speak(text, {
+        voice: 'zh',
+        amplitude: 170 + (excitement ? 30 : 0),
+        pitch: gender === 'male' ? 32 : 58,
+        speed: 168,
+        wordgap: 2
+      });
+    } catch (e) { /* 忽略 */ }
+  }
+
+  /* ---------------- 第三层：语义音效 ---------------- */
+
+  /** 事件 → 辨识音（audio.js 合成，零依赖） */
+  function cueFor(text, gender, cue) {
+    var S = global.Sound;
+    if (!S) return;
+    S.play(cue || 'vPlay');
+  }
+
+  /* ---------------- 点数 → 口头叫法 ---------------- */
+
   var RANK_CN = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十',
     '钩', '圈', 'K', '尖', '二', '小王', '大王'];
 
@@ -93,80 +238,92 @@
     }
   }
 
-  /* ---- 发声 ---- */
+  /* ---------------- 统一播报入口 ---------------- */
 
-  var queueCount = 0;   // 自己维护的待播计数（队列积压时丢弃旧播报，保持节奏）
-
-  function speak(text, gender, excitement) {
-    if (!supported || !enabled || !text) return;
-    try {
-      if (queueCount >= 2) {
-        try { synth.cancel(); } catch (e) { /* 忽略 */ }
-        queueCount = 0;
-      }
-      var isMale = gender === 'male';
-      // 系统只有一个中文音色时男女共用，靠音高/语速拉开反差
-      var sameVoice = isMale && voices.maleIsFemale;
-      var v = isMale ? voices.male : (voices.female || voices.any);
-      var u = new global.SpeechSynthesisUtterance(text);
-      if (v) { u.voice = v; u.lang = v.lang || 'zh-CN'; }
-      else { u.lang = 'zh-CN'; }
-      // 轻快的打牌情绪：语速略快，音高按性别微调并带随机起伏，避免机械感
-      u.rate = (sameVoice ? 1.0 : 1.15) + Math.random() * 0.1 + (excitement ? 0.05 : 0);
-      u.pitch = (sameVoice ? 0.6 : (isMale ? 0.95 : 1.15)) +
-        (Math.random() * 0.1 - 0.05) + (excitement ? 0.1 : 0);
-      u.volume = 1;
-      u.onend = u.onerror = function () { if (queueCount > 0) queueCount--; };
-      queueCount++;
-      synth.speak(u);
-    } catch (e) { /* 播报失败不影响游戏 */ }
+  function speak(text, gender, excitement, cue) {
+    if (!enabled || !text) return;
+    if (engine === 'tts') {
+      if (ttsVoicesReady) ttsSpeak(text, gender, excitement);
+      // 音色未就绪期间静默跳过（warmup 很快会完成）
+      return;
+    }
+    if (engine === 'mespeak' && mespeakState === 'ready') {
+      mespeakSpeak(text, gender, excitement);
+      return;
+    }
+    cueFor(text, gender, cue);   // 第三层：语义音效
   }
 
-  /** 每个座位固定一种音色：玩家女声，下家男声，上家女声（相邻座位不同声，便于分辨） */
-  var SEAT_GENDER = ['female', 'male', 'female'];
+  /** 每个座位固定一种音色：斗地主（3 家）与麻将（4 家）通用，相邻座位不同声 */
+  var SEAT_GENDER = ['female', 'male', 'female', 'male'];
+  function seatGender(seat) { return SEAT_GENDER[seat] || 'female'; }
 
   function announcePlay(seat, combo) {
     var Cards = global.Cards;
     var t = comboText(combo);
     if (!t) return;
-    var hot = !!(combo && Cards && (combo.type === Cards.CT.BOMB || combo.type === Cards.CT.ROCKET));
-    speak(t, SEAT_GENDER[seat] || 'female', hot);
+    var CT = Cards && Cards.CT;
+    var cue = 'vPlay';
+    if (CT) {
+      if (combo.type === CT.ROCKET) cue = 'rocket';
+      else if (combo.type === CT.BOMB) cue = 'bomb';
+      else if (combo.type === CT.SINGLE) cue = 'vSingle';
+      else if (combo.type === CT.PAIR) cue = 'vPair';
+      else if (combo.type === CT.STRAIGHT || combo.type === CT.DOUBLE_STRAIGHT ||
+        combo.type === CT.TRIPLE_STRAIGHT || combo.type === CT.AIRPLANE_ONE ||
+        combo.type === CT.AIRPLANE_PAIR) cue = 'vStraight';
+      else cue = 'vTriple';
+    }
+    speak(t, seatGender(seat), cue === 'bomb' || cue === 'rocket', cue);
   }
 
   function announcePass(seat) {
-    // 「不要」与「过」随机二选一，保留口语变化但不带拖腔变体
-    speak(Math.random() < 0.5 ? '不要' : '过', SEAT_GENDER[seat] || 'female', false);
+    speak(Math.random() < 0.5 ? '不要' : '过', seatGender(seat), false, 'pass');
   }
 
   /** 叫分：0=不叫，1/2/3 = 一分/两分/三分 */
   function announceBid(seat, score) {
     var texts = ['不叫', '一分', '两分', '三分'];
-    speak(texts[score] || '', SEAT_GENDER[seat] || 'female', score === 3);
+    speak(texts[score] || '', seatGender(seat), score === 3, 'bid');
   }
 
   /** 地主确定：由地主座位的声音念「叫地主」 */
   function announceLandlord(seat) {
-    speak('叫地主！', SEAT_GENDER[seat] || 'female', true);
+    speak('叫地主！', seatGender(seat), true, 'vLandlord');
   }
 
   /** 加倍：0=不加倍，1=加倍，2=超级加倍 */
   function announceDouble(seat, level) {
     var t = level === 2 ? '超级加倍！' : (level === 1 ? '加倍！' : '不加倍');
-    speak(t, SEAT_GENDER[seat] || 'female', level > 0);
+    speak(t, seatGender(seat), level > 0, 'double');
   }
 
-  function setEnabled(v) { enabled = !!v; if (!enabled) try { synth && synth.cancel(); } catch (e) { /* 忽略 */ } }
+  function setEnabled(v) {
+    enabled = !!v;
+    if (!enabled) {
+      try { synth && synth.cancel(); } catch (e) { /* 忽略 */ }
+      try { global.meSpeak && global.meSpeak.stop(); } catch (e) { /* 忽略 */ }
+    }
+  }
   function isEnabled() { return enabled; }
 
+  /** 调试 / 设置页展示当前引擎 */
+  function engineInfo() {
+    return { engine: engine, tts: ttsSupported, ttsVoices: ttsVoicesReady, mespeak: mespeakState };
+  }
+
   global.Voice = {
-    supported: supported,
+    supported: ttsSupported,
     comboText: comboText,
     announcePlay: announcePlay,
     announcePass: announcePass,
     announceBid: announceBid,
     announceLandlord: announceLandlord,
     announceDouble: announceDouble,
-    speak: function (text, gender) { speak(text, gender || 'female', false); },
+    speak: function (text, gender, cue) { speak(text, gender || 'female', false, cue); },
+    seatGender: seatGender,
+    warmup: warmup,
+    engineInfo: engineInfo,
     setEnabled: setEnabled,
     isEnabled: isEnabled
   };

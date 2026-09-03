@@ -52,14 +52,34 @@
 
   function P(seat) { return G.players[seat]; }
 
+  /**
+   * 带「局次令牌」的延时调用：一旦开了新局，上一局遗留的回调会被直接丢弃。
+   * 同时登记待执行队列，由 800ms 心跳兜底（移动端后台冻结 setTimeout 时，
+   * 回到前台立即补跑超期任务），与斗地主 game.js 同构。
+   */
   var __rawSetTimeout = global.setTimeout;
+  var pendingTasks = [];
+  function runTask(t) {
+    if (t.done) return;
+    t.done = true;
+    if (G.gen !== t.gen) return;
+    t.fn();
+  }
   function later(ms, fn) {
     var gen = G.gen;
-    return __rawSetTimeout(function () {
-      if (G.gen !== gen) return;
-      fn();
-    }, ms);
+    var task = { at: Date.now() + ms, gen: gen, fn: fn, done: false };
+    pendingTasks.push(task);
+    if (pendingTasks.length > 300) {
+      pendingTasks = pendingTasks.filter(function (x) { return !x.done; });
+    }
+    return __rawSetTimeout(function () { runTask(task); }, ms);
   }
+  setInterval(function () {
+    var now = Date.now();
+    for (var i = 0; i < pendingTasks.length; i++) {
+      if (!pendingTasks[i].done && pendingTasks[i].at <= now) runTask(pendingTasks[i]);
+    }
+  }, 800);
 
   function meldBudget(p) { return 4 - p.melds.length; }
   function isDealer(seat) { return seat === G.dealer; }
@@ -404,6 +424,12 @@
     var chk = afterMeld
       ? { win: false, gangIdx: -1, jiagangIdx: -1 }
       : AI.selfCheck(selfCheckCtx(my));
+    // 自动胡：摸到即和，无需按键
+    if (chk.win) {
+      UI.toast('自动胡：' + Tiles.labelOf(my.hand[my.hand.length - 1].idx), 1600);
+      doWin(0, { selfDraw: true, tile: my.hand[my.hand.length - 1] });
+      return;
+    }
     G.selected = null;
     renderHand();
     setActions({
@@ -414,7 +440,6 @@
     });
     Sound.play('turn');
     startTimer();
-    if (chk.win) UI.toast('可以自摸胡！（点「胡」生效）', 1800);
   }
 
   function setActions(cfg) {
@@ -500,7 +525,7 @@
     Sound.play('play');
     if (seat === 0) renderHand();
     log(p.name + ' 打 ' + tile.label, seat === 0);
-    if (typeof Voice !== 'undefined') Voice.speak(tile.label);
+    if (typeof Voice !== 'undefined') Voice.speak(tile.label, Voice.seatGender(seat), 'vPlay');
     renderAll();
 
     var claims = buildClaims(seat, tile);
@@ -606,7 +631,12 @@
       return;
     }
 
-    // 玩家选择
+    // 玩家选择（胡牌自动胡，不再询问）
+    if (claim.type === 'hu') {
+      UI.toast('自动胡：接 ' + P(fromSeat).name + ' 的炮', 1600);
+      applyClaim(claim, fromSeat);
+      return;
+    }
     G.busy = true;
     G.activeClaim = { queue: queue, fromSeat: fromSeat };
     var label;
@@ -632,7 +662,7 @@
           resolveClaim(queue, fromSeat);
         }
       }
-    ], claim.type === 'hu' ? '有人点炮，可胡！' : '这张牌要不要？');
+    ], '这张牌要不要？');
   }
 
   function applyClaim(claim, fromSeat) {
@@ -668,7 +698,7 @@
     Sound.play('double');
     var txt = claim.type === 'gang' ? '杠' : (claim.type === 'peng' ? '碰' : '吃');
     MjUI.bubble(claim.seat, txt + ' !', 'claim');
-    if (typeof Voice !== 'undefined') Voice.speak(txt);
+    if (typeof Voice !== 'undefined') Voice.speak(txt, Voice.seatGender(claim.seat), claim.type === 'gang' ? 'vGang' : 'vClaim');
     log(p.name + ' ' + txt + ' ' + Tiles.labelOf(idx), claim.seat === 0);
 
     G.busy = false;
@@ -702,7 +732,7 @@
     p.melds.push({ type: 'angang', tiles: [idx, idx, idx, idx], from: seat });
     Sound.play('double');
     MjUI.bubble(seat, '暗杠 !', 'claim');
-    if (typeof Voice !== 'undefined') Voice.speak('暗杠');
+    if (typeof Voice !== 'undefined') Voice.speak('暗杠', Voice.seatGender(seat), 'vGang');
     log(p.name + ' 暗杠 ' + Tiles.labelOf(idx), seat === 0);
     renderAll();
     if (seat === 0) renderHand();
@@ -763,15 +793,9 @@
       });
       return;
     }
-    G.busy = true;
-    G.activeClaim = {
-      jiagang: true,
-      pass: function () { proceed(false); }
-    };
-    UI.floatPanel(P(seat).name + ' 加杠 ' + Tiles.labelOf(idx), [
-      { text: '抢杠胡！', cls: 'gold', onClick: function () { G.activeClaim = null; G.busy = false; proceed(true); } },
-      { text: '过', cls: 'ghost', onClick: function () { G.activeClaim = null; G.busy = false; proceed(false); } }
-    ], '这张杠牌能让你和牌！');
+    // 玩家自动抢杠胡
+    UI.toast('自动胡：抢 ' + P(seat).name + ' 的杠', 1600);
+    proceed(true);
   }
 
   /** 加杠真正生效：升级碰为杠，岭上补牌 */
@@ -789,7 +813,7 @@
     }
     Sound.play('double');
     MjUI.bubble(seat, '加杠 !', 'claim');
-    if (typeof Voice !== 'undefined') Voice.speak('加杠');
+    if (typeof Voice !== 'undefined') Voice.speak('加杠', Voice.seatGender(seat), 'vGang');
     log(p.name + ' 加杠 ' + Tiles.labelOf(idx), seat === 0);
     renderAll();
     if (seat === 0) renderHand();
@@ -861,7 +885,7 @@
       Store.recordGame({ role: 'mahjong', win: iWin, delta: myDelta }, 'mj');
     }
     Sound.play(iWin ? 'win' : 'lose');
-    if (typeof Voice !== 'undefined') Voice.speak(iWin ? '我胡了' : w.name + '胡了');
+    if (typeof Voice !== 'undefined') Voice.speak(iWin ? '我胡了' : w.name + '胡了', Voice.seatGender(winnerSeat), 'vHu');
     MjUI.bubble(winnerSeat, '胡 !', 'win');
     log('—— ' + w.name + ' 胡 ' + Tiles.labelOf(winTile.idx) + '（' + score.fan + ' 番）——', true);
 
@@ -992,6 +1016,8 @@
       '<p>点击手牌选中，再点一次直接打出；或选中后按「打出」。</p>' +
       '<p>「提示」按高手思路推荐打牌（大师模式隐藏）。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时自动打推荐牌 / 自动过。</p>' +
+      '<p><b>自动胡</b>：自摸 / 接炮 / 抢杠能胡时自动和牌，无需按键。</p>' +
+      '<p>语音三层兜底（系统 TTS → 本地合成 → 语义音效）；iPad / iPhone 完全无声请检查侧边静音键。</p>' +
       '</div>',
       [{ text: '知道了', cls: 'gold' }]
     );
@@ -1088,7 +1114,9 @@
     newGame: newGame,
     suspend: suspend,
     showStats: showStats,
-    showHelp: showHelp
+    showHelp: showHelp,
+    /* 仅供测试驱动内部流程（真实路径触发），不承担对外语义 */
+    __hooks: { nextTurn: nextTurn, humanDrawAction: humanDrawAction }
   };
 
   if (document.readyState === 'loading') {

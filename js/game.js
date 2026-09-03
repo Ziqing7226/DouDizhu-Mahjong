@@ -93,15 +93,34 @@
   /**
    * 带「局次令牌」的延时调用：一旦开了新局，上一局遗留的回调会被直接丢弃。
    * 否则在 AI 思考 / 动画播放途中重开一局时，旧回调会污染新对局的状态。
+   *
+   * 同时登记进待执行队列，由 800ms 心跳兜底：移动端浏览器把页面切到
+   * 后台时会冻结/丢弃 setTimeout，回到前台后若定时器已丢，心跳会把
+   * 超期任务立即补跑 —— 修复「高手场 AI 一直不出牌」（后台回来游戏卡死）。
    */
   var __rawSetTimeout = global.setTimeout;
+  var pendingTasks = [];
+  function runTask(t) {
+    if (t.done) return;
+    t.done = true;
+    if (G.gen !== t.gen) return;
+    t.fn();
+  }
   function later(ms, fn) {
     var gen = G.gen;
-    return __rawSetTimeout(function () {
-      if (G.gen !== gen) return;
-      fn();
-    }, ms);
+    var task = { at: Date.now() + ms, gen: gen, fn: fn, done: false };
+    pendingTasks.push(task);
+    if (pendingTasks.length > 300) {
+      pendingTasks = pendingTasks.filter(function (x) { return !x.done; });
+    }
+    return __rawSetTimeout(function () { runTask(task); }, ms);
   }
+  setInterval(function () {
+    var now = Date.now();
+    for (var i = 0; i < pendingTasks.length; i++) {
+      if (!pendingTasks[i].done && pendingTasks[i].at <= now) runTask(pendingTasks[i]);
+    }
+  }, 800);
   function roleOf(seat) { return seat === G.landlord ? 'landlord' : 'farmer'; }
   function teammateOf(seat) {
     if (seat === G.landlord) return -1;
@@ -869,7 +888,9 @@
       '<p>点击手牌选中 / 取消；<b>按住并横向拖动可连选一排牌</b>，划过的牌全部选中。</p>' +
       '<p>再点「出牌」确认；「提示」可循环切换可出的组合。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时会自动不要或自动出最小的一手。</p>' +
-      '<p>顶栏 🗣 可开关<b>语音播报</b>：任何一方出牌都会用男女声念出牌型（对二、三带一、不要…）。</p>' +
+      '<p>顶栏 🗣 可开关<b>语音播报</b>：任何一方出牌都会念出牌型（对二、三带一、不要…）。</p>' +
+      '<p>语音引擎三层兜底：系统 TTS（Edge / 桌面 / iOS）→ 本地合成（无引擎的安卓 / 鸿蒙）→ 语义音效。' +
+      'iPad / iPhone 若完全无声，请检查<b>侧边静音键</b>（硬件静音会屏蔽网页音频）。</p>' +
       '</div>',
       [{ text: '知道了', cls: 'gold' }]
     );
@@ -974,9 +995,11 @@
       else if (e.key.toLowerCase() === 'h') doHint();
     });
 
-    // 首次交互后再启动音频上下文（浏览器策略要求）
+    // 首次交互后再启动音频上下文（浏览器策略要求），
+    // 同时预热语音引擎（部分安卓 TTS 需要手势内先 speak 过一次）
     document.addEventListener('pointerdown', function once() {
       Sound.resume();
+      if (typeof Voice !== 'undefined') Voice.warmup();
       if (Bgm.isEnabled()) Bgm.start();   // 音乐也依赖用户首次交互
       document.removeEventListener('pointerdown', once);
     });

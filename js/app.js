@@ -27,7 +27,8 @@
   var DOM = {};
 
   function bindDom() {
-    ['gameLobby', 'btnGameMode', 'logoText', 'ddzView', 'mjView'].forEach(function (id) {
+    ['gameLobby', 'btnGameMode', 'logoText', 'ddzView', 'mjView',
+      'btnFullscreen', 'fsBanner', 'btnFsGo', 'btnFsClose'].forEach(function (id) {
       DOM[id] = el(id);
     });
   }
@@ -69,6 +70,59 @@
     }
   }
 
+  /* ---------------- 全屏（移动端横屏时建议开启） ---------------- */
+
+  function fsElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+  function fsRequest(el) {
+    return (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen || null);
+  }
+  function fsExit() {
+    return (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen || null);
+  }
+
+  function toggleFullscreen() {
+    var el = document.documentElement;
+    if (!fsElement()) {
+      var req = fsRequest(el);
+      if (req) {
+        try {
+          var p = req.call(el);
+          if (p && p.catch) p.catch(function () { showFsTip(); });
+        } catch (e) { showFsTip(); }
+        return true;
+      }
+      showFsTip();   // 不支持全屏 API（如 iPhone Safari）
+      return false;
+    }
+    var ex = fsExit();
+    if (ex) { try { ex.call(document); } catch (e) { /* 忽略 */ } }
+    return true;
+  }
+
+  /** 进入不了全屏时，展开文字指引 */
+  function showFsTip() {
+    DOM.fsBanner.classList.add('show', 'show-tip');
+  }
+
+  /** 全屏建议条：仅移动端 + 横屏 + 未全屏 + 未关闭过时出现 */
+  var FS_HINT_KEY = 'doudizhu.fsHintClosed';
+  function updateFsBanner() {
+    var mobile = document.body.classList.contains('is-mobile');
+    var landscape = global.innerWidth >= global.innerHeight;
+    var dismissed = false;
+    try { dismissed = localStorage.getItem(FS_HINT_KEY) === '1'; } catch (e) { /* 忽略 */ }
+    var show = mobile && landscape && !fsElement() && !dismissed;
+    DOM.fsBanner.classList.toggle('show', show);
+    if (!show) DOM.fsBanner.classList.remove('show-tip');
+  }
+
+  function syncFsButton() {
+    DOM.btnFullscreen.textContent = fsElement() ? '⛶' : '⛶';
+    DOM.btnFullscreen.classList.toggle('off', !!fsElement());
+  }
+
   function init() {
     bindDom();
 
@@ -97,6 +151,31 @@
         if (global.Sound) global.Sound.play('select');
       });
     });
+
+    // 全屏：顶栏按钮 + 移动端建议条
+    DOM.btnFullscreen.addEventListener('click', function () {
+      toggleFullscreen();
+      if (global.Sound) global.Sound.play('select');
+    });
+    DOM.btnFsGo.addEventListener('click', function () {
+      var ok = toggleFullscreen();
+      // 稍后确认：仍不在全屏则展开文字指引
+      setTimeout(function () {
+        if (!fsElement()) showFsTip();
+        else { DOM.fsBanner.classList.remove('show'); }
+      }, ok ? 600 : 0);
+    });
+    DOM.btnFsClose.addEventListener('click', function () {
+      DOM.fsBanner.classList.remove('show');
+      try { localStorage.setItem(FS_HINT_KEY, '1'); } catch (e) { /* 忽略 */ }
+    });
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
+      document.addEventListener(ev, function () { syncFsButton(); updateFsBanner(); });
+    });
+    global.addEventListener('resize', updateFsBanner);
+    global.addEventListener('orientationchange', updateFsBanner);
+    syncFsButton();
+    updateFsBanner();
 
     highlightRooms();
     DOM.gameLobby.classList.add('show');   // 进入页面先选游戏
