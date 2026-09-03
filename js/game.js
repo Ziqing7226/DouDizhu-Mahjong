@@ -678,19 +678,28 @@
   }
 
   function doPass(seat) {
-    // 硬性不变量：领出方（无待跟牌）不能不要。
-    // AI 决策异常返回空/非法牌组时会走到这里，若放任 pass 会形成
-    // 「三家一直不出牌」的死循环（bug 实测出现过）。兜底：强制出最小单张。
+    // 硬性不变量：领出方（无待跟牌）不能不要。若决策层出现任何异常
+    // （理论上不应发生），兜底出「最优拆解的第一手」——仍来自算法的
+    // 最优化决策，而非随手出最小单张；若连拆解都失败，才退到最小单张。
     if (!G.lastCombo) {
       var h = P(seat).hand;
-      var smallest = h[h.length - 1];
-      var combo = smallest ? Cards.parse([smallest]) : null;
-      if (combo) {
-        if (seat !== 0) log(P(seat).name + ' 领出', seat === 0);
-        doPlay(seat, [smallest], combo);
-        return;
+      var pick = null, pickCombo = null;
+      try {
+        var dec = Dec.decompose(h);
+        if (dec && dec.hands.length) {
+          pick = dec.hands[0];
+          pickCombo = Cards.parse(pick);
+        }
+      } catch (e) { /* 拆解异常则走最后保险 */ }
+      if (!pickCombo) {
+        pick = h[h.length - 1];
+        pickCombo = pick ? Cards.parse([pick]) : null;
       }
-      return;   // 没牌可出（理论不可达：nextTurn 已拦空手）
+      if (pickCombo) {
+        if (seat !== 0) log(P(seat).name + ' 领出', seat === 0);
+        doPlay(seat, pick, pickCombo);
+      }
+      return;
     }
     lockActions();
     G.passCount++;

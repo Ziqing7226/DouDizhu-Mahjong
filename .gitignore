@@ -1,8 +1,9 @@
 # 本地开发文档，不随仓库公开
-docs/需求说明书.md
+docs/
 
 # 操作系统杂物
 Thumbs.db
 .DS_Store
 desktop.ini
 .test-server.ps1
+.fuzz.js
