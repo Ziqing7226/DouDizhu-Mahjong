@@ -518,7 +518,9 @@
     if (!G.selected) { UI.toast('请先选一张牌'); return; }
     var t = G.selected;
     G.selected = null;
-    clearTimer();
+    // 注意：这里刻意不清计时器 —— 与「双击打牌」路径保持一致。
+    // 计时器继续走完本回合预算，并驱动后续吃/碰/杠浮层的「超时自动过」；
+    // 若在此清掉，按钮路径打出的牌会让争抢浮层失去超时（挂机即卡死）。
     doDiscard(0, t);
   }
 
@@ -649,6 +651,9 @@
     }
     G.busy = true;
     G.activeClaim = { queue: queue, fromSeat: fromSeat };
+    // 争抢浮层给满完整的 30 秒（重置计时器），超时由 autoAct 自动「过」，
+    // 不吃打出牌时剩下的零头预算
+    startTimer();
     var label;
     if (claim.type === 'hu') label = '胡（' + Tiles.labelOf(tile.idx) + '）';
     else if (claim.type === 'gang') label = '杠（' + Tiles.labelOf(tile.idx) + '）';
@@ -1034,6 +1039,7 @@
     G.timeLeft = TURN_SECONDS;
     G.timer = setInterval(function () {
       if (G.gen !== gen || G.phase !== 'playing') { clearTimer(); return; }
+      if (UI.overlayShown()) return;   // 帮助/战绩等弹窗打开时暂停倒计时
       G.timeLeft--;
       if (G.timeLeft <= 0) { clearTimer(); autoAct(); return; }
       if (G.timeLeft <= 5) Sound.play('warn');

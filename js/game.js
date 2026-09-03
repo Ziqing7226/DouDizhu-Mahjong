@@ -729,6 +729,7 @@
     G.timeLeft = TURN_SECONDS;
     G.timer = setInterval(function () {
       if (G.gen !== gen || G.phase !== 'playing' || G.turn !== 0) { clearTimer(); return; }
+      if (UI.overlayShown()) return;   // 帮助/战绩等弹窗打开时暂停倒计时，读完再来
       G.timeLeft--;
       if (G.timeLeft <= 0) {
         clearTimer();
@@ -1010,6 +1011,7 @@
 
     document.addEventListener('keydown', function (e) {
       if (G.phase !== 'playing' || G.turn !== 0 || G.busy) return;
+      if (UI.overlayShown()) return;   // 弹窗打开时键盘不落到牌桌上（Esc 不再误触「不要」）
       if (e.key === 'Enter') tryPlay();
       else if (e.key === ' ' || e.key === 'Escape') { e.preventDefault(); tryPass(); }
       else if (e.key.toLowerCase() === 'h') doHint();

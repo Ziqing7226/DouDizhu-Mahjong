@@ -587,6 +587,7 @@
     toast: toast, bombEffect: bombEffect, springBanner: springBanner,
     floatPanel: floatPanel, closeFloat: closeFloat,
     showDialog: showDialog, closeDialog: closeDialog,
+    overlayShown: overlayShown,
     addDialogCloseHandler: addDialogCloseHandler,
     setDialogCloseHandler: setDialogCloseHandler,
     showLobby: showLobby, hideLobby: hideLobby,

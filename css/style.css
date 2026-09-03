@@ -1374,7 +1374,9 @@ body {
 .mj-river-1 { flex-flow: column-reverse wrap-reverse; }  /* 右家：列贴右缘起向桌心，列内自下而上 */
 .mj-river-3 { flex-flow: column wrap; }                   /* 左家：列贴左缘起向桌心，列内自上而下 */
 .mj-river .mtile { width: 40px; height: 54px; font-size: 17px; opacity: .96; }
-.mj-river .mtile.last { box-shadow: 0 0 0 2px var(--gold), 0 4px 12px rgba(0, 0, 0, .5); }
+.mj-river .mtile.last {
+  box-shadow: 0 3px 0 #c6b896, 0 0 0 2px var(--gold), 0 6px 12px rgba(0, 0, 0, .5);
+}
 /* 牌头朝桌心：左家 +90°、右家 -90°、对家 180°（天凤/雀魂同款） */
 .mj-river-3 .mtile { transform: rotate(90deg); }
 .mj-river-1 .mtile { transform: rotate(-90deg); }
@@ -1596,10 +1598,6 @@ body {
 .is-mobile .mj-actions .btn { padding: 11px 0; font-size: 16px; }
 .is-mobile .mj-seat .avatar { width: 46px; height: 46px; font-size: 23px; }
 .is-mobile .mj-wall-info { top: 45%; font-size: 12px; }
-
-/* 语音引擎选择（侧栏面板）：四枚等宽小按钮 */
-.voice-panel .seg { width: 100%; }
-.voice-panel .seg button { flex: 1; padding: 7px 0; font-size: 12px; }
 
 /* ---- 争抢浮层：按钮更大更顺拇指 ---- */
 .is-mobile .float-panel { top: 60%; padding: 16px 20px; }
