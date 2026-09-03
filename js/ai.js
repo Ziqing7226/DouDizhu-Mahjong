@@ -100,7 +100,7 @@
       bidNoise: 3.5,
       bidBias: -1.5,
       superDouble: false,
-      thinkMs: [500, 900]
+      thinkMs: [1000, 3000]
     },
     normal: {
       name: '中等',
@@ -112,7 +112,7 @@
       bidNoise: 1.5,
       bidBias: 0,
       superDouble: false,
-      thinkMs: [600, 1100]
+      thinkMs: [1000, 3000]
     },
     master: {
       name: '大师',
@@ -125,7 +125,7 @@
       bidNoise: 0,
       bidBias: 0.5,
       superDouble: true,
-      thinkMs: [500, 900]
+      thinkMs: [1000, 3000]
     },
     hard: {
       name: '高手',
@@ -137,7 +137,7 @@
       bidNoise: 0,
       bidBias: 0.5,
       superDouble: true,
-      thinkMs: [700, 1300]
+      thinkMs: [1000, 3000]
     }
   };
 

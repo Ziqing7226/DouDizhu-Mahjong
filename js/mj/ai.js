@@ -24,9 +24,9 @@
   var Rules = isNode ? require('./rules.js') : global.MjRules;
 
   var CFG = {
-    easy: { name: '新手', thinkMs: [450, 950], claimWhim: 0.4 },
-    hard: { name: '高手', thinkMs: [650, 1300], claimWhim: 0 },
-    master: { name: '大师', thinkMs: [850, 1700], claimWhim: 0 }
+    easy: { name: '新手', thinkMs: [1000, 3000], claimWhim: 0.4 },
+    hard: { name: '高手', thinkMs: [1000, 3000], claimWhim: 0 },
+    master: { name: '大师', thinkMs: [1000, 3000], claimWhim: 0 }
   };
 
   /* ---------------- 向听缓存 ---------------- */
