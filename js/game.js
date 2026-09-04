@@ -794,7 +794,7 @@
 
     Store.recordGame({
       role: iAmLandlord ? 'landlord' : 'farmer',
-      win: iWin, delta: delta, bombs: G.bombs, spring: spring || antiSpring
+      win: iWin, delta: delta, bombs: G.bombs, spring: spring, antiSpring: antiSpring
     });
 
     if (spring) { UI.springBanner('春 天'); Sound.play('spring'); }
@@ -901,6 +901,7 @@
       '<div class="sec"><h4>其他</h4>' +
       '<div class="kv"><span>打出炸弹</span><b>' + s.bombs + ' 个</b></div>' +
       '<div class="kv"><span>春天次数</span><b>' + s.springs + ' 次</b></div>' +
+      '<div class="kv"><span>反春天次数</span><b>' + (s.antiSprings || 0) + ' 次</b></div>' +
       '<div class="kv"><span>存储方式</span><b>' + (Store.persistent ? '本地持久化' : '临时内存') + '</b></div>' +
       '</div>',
       [

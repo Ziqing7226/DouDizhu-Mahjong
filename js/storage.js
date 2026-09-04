@@ -33,7 +33,8 @@
     streak: 0,         // 当前连胜
     bestStreak: 0,     // 最高连胜
     bombs: 0,          // 打出炸弹总数（斗地主）
-    springs: 0         // 春天次数（斗地主）
+    springs: 0,        // 春天次数（斗地主：地主赢且农民一张未出）
+    antiSprings: 0     // 反春天次数（斗地主：农民赢且地主只出一手）
   };
 
   var DEFAULT_PREFS = {
@@ -120,7 +121,10 @@
     }
     s.score += (result.delta || 0);
     s.bombs += (result.bombs || 0);
+    // 春天 / 反春天分列统计：两者都是一边倒×2 局，但稀有度和方向不同，
+    // 合并计数会把「打出春天」和「被反春天惨败」混进同一个数字
     if (result.spring) s.springs += 1;
+    if (result.antiSpring) s.antiSprings += 1;
 
     if (result.win) {
       s.streak += 1;

@@ -1001,10 +1001,11 @@ ok(s3.landlordGames === 1 && s3.landlordWins === 1, '地主场次/胜场统计�
 ok(s3.score === 400, '积分累计错误: ' + s3.score);
 ok(s3.streak === 1 && s3.bestStreak === 1, '连胜统计错误');
 ok(s3.bombs === 2 && s3.springs === 1, '炸弹/春天统计错误');
-ctx.Store.recordGame({ role: 'farmer', win: false, delta: -100, bombs: 0, spring: false });
+ctx.Store.recordGame({ role: 'farmer', win: false, delta: -100, bombs: 0, spring: false, antiSpring: true });
 const s4 = ctx.Store.getStats();
 ok(s4.streak === 0 && s4.bestStreak === 1, '失败后应清空连胜但保留最高连胜');
 ok(s4.farmerGames === 1 && s4.farmerWins === 0, '农民场次统计错误');
+ok(s4.antiSprings === 1 && s4.springs === 1, '反春天应单独计数，不混入春天');
 
 /* ============================================================
  * 10.5 背景音乐（复用上面的 AudioContext 桩）
