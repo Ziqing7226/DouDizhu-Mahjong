@@ -59,7 +59,7 @@
     return pairs === 7;
   }
 
-  /** 国士无双：幺九字每种至少一张 + 其中一种成对 */
+  /** 十三幺：幺九字每种至少一张 + 其中一种成对 */
   function isKokushi(c) {
     var kinds = 0, hasPair = false;
     for (var i = 0; i < 34; i++) {
@@ -72,7 +72,7 @@
 
   /** 是否和牌。draw 是刚摸/刚被打出的那张（含在 counts 里） */
   function isWin(counts, meldBudget) {
-    // 门清才有七对 / 国士
+    // 门清才有七对 / 十三幺
     if (meldBudget === 4) {
       if (isChiitoi(counts)) return true;
       if (isKokushi(counts)) return true;
@@ -91,7 +91,7 @@
 
   /**
    * 七对向听：6 − 对子数 + max(0, 7 − 种类数)
-   * 国士向听：13 − 种类数 − (有幺九字对子 ? 1 : 0)
+   * 十三幺向听：13 − 种类数 − (有幺九字对子 ? 1 : 0)
    * 仅门清有意义，否则返回 Infinity
    */
   function specialShanten(c, meldBudget) {
@@ -164,8 +164,8 @@
   }
 
   /**
-   * 综合向听数：min(标准型, 七对, 国士)。已和牌返回 −1。
-   * 标准型/七对/国士的公式对完整牌形自然给出 −1，因此不需要再调 isWin。
+   * 综合向听数：min(标准型, 七对, 十三幺)。已和牌返回 −1。
+   * 标准型/七对/十三幺的公式对完整牌形自然给出 −1，因此不需要再调 isWin。
    */
   function shanten(counts, meldBudget) {
     return Math.min(standardShanten(counts, meldBudget), specialShanten(counts, meldBudget));
@@ -255,12 +255,12 @@
         pairs += counts[i] / 2;
       }
       if (allEven && pairs === 7) { fan += 3; names.push('七对 ×3'); }
-      // 国士无双（十三幺）
-      if (isKokushi(counts)) { fan += 12; names.push('国士无双 ×13'); }
+      // 十三幺
+      if (isKokushi(counts)) { fan += 12; names.push('十三幺 ×13'); }
     }
 
-    // 门前清（无副露，非自摸也算，自摸另计）
-    if (menqing) { fan += 1; names.push('门前清 ×1'); }
+    // 门清（无副露，非自摸也算，自摸另计）
+    if (menqing) { fan += 1; names.push('门清 ×1'); }
     // 自摸
     if (selfDraw) { fan += 1; names.push('自摸 ×1'); }
     // 杠开（杠后岭上自摸）

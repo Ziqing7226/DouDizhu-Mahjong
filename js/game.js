@@ -814,22 +814,18 @@
       return '<div class="kv"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>';
     }).join('');
 
-    var remainRows = G.players.map(function (p) {
-      if (p.seat === winner) return '';
-      return '<div class="kv"><span>' + p.name + ' 剩余</span><b>' +
-        (p.hand.length ? p.hand.map(function (c) { return c.label; }).join(' ') : '—') +
-        '</b></div>';
-    }).join('');
+    // 余牌画到牌桌各家座位对应的角落（我方在手牌区可见，不重复），
+    // 点「复盘牌桌」隐藏面板即可回看；结算面板只保留本局明细（两栏流排）
+    UI.showRemainCards(
+      G.players
+        .filter(function (p) { return p.seat !== winner; })
+        .map(function (p) { return { seat: p.seat, cards: p.hand.slice() }; })
+    );
 
-    /* 结算面板：加宽双栏（明细 | 余牌），删去累计战绩（顶栏 📊 随可查看），
-     * 支持「复盘牌桌」隐藏面板回看牌桌终态（UI.showRecall 呼出） */
     G.settleHtml =
       '<div class="settle-title ' + (iWin ? 'win' : 'lose') + '">' +
       (iWin ? '胜 利' : '失 败') + '</div>' +
-      '<div class="settle-grid">' +
-      '<div class="sec"><h4>本局明细</h4>' + detailRows + '</div>' +
-      (remainRows ? '<div class="sec"><h4>各家余牌</h4>' + remainRows + '</div>' : '') +
-      '</div>';
+      '<div class="sec"><h4>本局明细</h4><div class="kv-cols">' + detailRows + '</div></div>';
     showSettle();
 
     log('—— ' + P(winner).name + ' 获胜，' + (iWin ? '我 +' : '我 ') + delta + ' 分 ——', true);
@@ -931,6 +927,7 @@
       '<p>再点「出牌」确认；「提示」可循环切换可出的组合。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时会自动不要或自动出最小的一手。</p>' +
       '<p>顶栏 🗣 同时开关<b>音效与语音播报</b>：任何一方出牌都会念出牌型（对二、三带一、不要…）。</p>' +
+      '<p>语音引擎：' + (typeof Voice !== 'undefined' ? Voice.engineText() : '提示音') + '。</p>' +
       '</div>',
       [{ text: '知道了', cls: 'gold' }]
     );

@@ -122,8 +122,6 @@
    * 数据由游戏层驱动：setTurnClock 锚定起点，clearTurnClock 在行动后撤销。
    * AI 的 30 秒是装饰性的（它 1~3 秒就会出牌，环提前消失）。 */
 
-  var RING_PATH = 'M50 0 H88 A12 12 0 0 1 100 12 V88 A12 12 0 0 1 88 100 H12 ' +
-    'A12 12 0 0 1 0 88 V12 A12 12 0 0 1 12 0 H50 Z';   // 从顶部中点起顺时针
   var clock = null;   // { seat, endsAt, total, explicit, iv, els:{box,svg,prg} }
 
   function setTurnClock(seat, totalSec) {
@@ -167,6 +165,30 @@
     return (100 * (1 - frac)).toFixed(1);
   }
 
+  /** 座位框实际像素尺寸（读不到布局时用标称值兜底，保证桩环境/隐藏态不炸） */
+  function ringDims(box) {
+    var w = 110, h = 70;
+    try {
+      var r = box.getBoundingClientRect();
+      if (r && r.width > 0) w = Math.max(20, Math.round(r.width) + 10);
+      if (r && r.height > 0) h = Math.max(20, Math.round(r.height) + 10);
+    } catch (e) { /* 忽略 */ }
+    return { w: w, h: h };
+  }
+
+  /** 按尺寸画圆角矩形路径（环贴框、圆角不变形），从顶部中点顺时针一整圈 */
+  function ringPathFor(w, h) {
+    var rad = Math.min(14, h / 2, w / 2);
+    return 'M' + (w / 2) + ' 0 H' + (w - rad) +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + w + ' ' + rad +
+      ' V' + (h - rad) +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + (w - rad) + ' ' + h +
+      ' H' + rad +
+      ' A' + rad + ' ' + rad + ' 0 0 1 0 ' + (h - rad) +
+      ' V' + rad +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + rad + ' 0 H' + (w / 2) + ' Z';
+  }
+
   function injectTurnClock(box) {
     if (!clock || !box) return;
     if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的框上
@@ -175,19 +197,18 @@
       ? function (t) { return document.createElementNS(svgNS, t); }
       : function (t) { return document.createElement(t); };   // 无 DOM 桩兜底
 
+    // viewBox 与框实际像素 1:1，环贴框且圆角不变形（重注入时按当前尺寸重建）
+    var dim = ringDims(box);
     var svg = mkSVG('svg');
-    svg.setAttribute('viewBox', '0 0 100 100');
-    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('viewBox', '0 0 ' + dim.w + ' ' + dim.h);
     svg.setAttribute('class', 'turn-ring');
     var trk = mkSVG('path');
-    trk.setAttribute('d', RING_PATH);
+    trk.setAttribute('d', ringPathFor(dim.w, dim.h));
     trk.setAttribute('pathLength', '100');
-    trk.setAttribute('vector-effect', 'non-scaling-stroke');
     trk.setAttribute('class', 'trk');
     var prg = mkSVG('path');
-    prg.setAttribute('d', RING_PATH);
+    prg.setAttribute('d', ringPathFor(dim.w, dim.h));
     prg.setAttribute('pathLength', '100');
-    prg.setAttribute('vector-effect', 'non-scaling-stroke');
     prg.setAttribute('class', 'prg');
     prg.style.strokeDasharray = '100';
     prg.style.strokeDashoffset = ringOffsetNow();   // 落位即当前进度，每回合刷新正确
@@ -377,6 +398,7 @@
 
   function clearAllSlots() {
     [0, 1, 2].forEach(clearSlot);
+    hideRemainCards();
   }
 
   function bubble(seat, text, cls) {
@@ -388,6 +410,26 @@
     b.textContent = text;
     w.appendChild(b);
     return b;
+  }
+
+  /** 局终复盘：把输家的余牌亮在牌桌上「各自座位对应的角落」（可换行多排）。
+   *  我方余牌不重复展示（手牌区本来就看得见）。牌留在桌上直到下一局。 */
+  function showRemainCards(list) {
+    hideRemainCards();
+    (list || []).forEach(function (item) {
+      if (item.seat === 0 || !item.cards || !item.cards.length) return;
+      var wrap = document.createElement('div');
+      wrap.className = 'remain-cards remain-' + item.seat;
+      Cards.sortAsc(item.cards).forEach(function (c) {
+        wrap.appendChild(cardEl(c, 'remain'));
+      });
+      DOM.playArea.appendChild(wrap);
+    });
+  }
+
+  function hideRemainCards() {
+    var old = DOM.playArea.querySelectorAll('.remain-cards');
+    for (var i = 0; i < old.length; i++) old[i].remove();
   }
 
   function showPlay(seat, cards, combo, opts) {
@@ -628,6 +670,7 @@
     setCardDragHandler: setCardDragHandler,
     clearSlot: clearSlot, clearAllSlots: clearAllSlots,
     showPlay: showPlay, showPass: showPass, bubble: bubble,
+    showRemainCards: showRemainCards, hideRemainCards: hideRemainCards,
     renderBottom: renderBottom, renderMultiplier: renderMultiplier,
     renderCounter: renderCounter, renderInfo: renderInfo, renderLogs: renderLogs,
     toast: toast, bombEffect: bombEffect, springBanner: springBanner,

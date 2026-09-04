@@ -120,7 +120,13 @@
       u.pitch = (sameVoice ? 0.6 : (isMale ? 0.95 : 1.15)) +
         (Math.random() * 0.1 - 0.05) + (excitement ? 0.1 : 0);
       u.volume = 1;
-      u.onend = u.onerror = function () { if (queueCount > 0) queueCount--; };
+      u.onend = u.onerror = function () {
+        if (queueCount > 0) queueCount--;
+        // iOS：TTS 抢占音频会话导致 WebAudio（BGM/音效）中断，播完即尝试唤醒
+        if (global.Sound && global.Sound.resume) {
+          try { global.Sound.resume(); } catch (e) { /* 忽略 */ }
+        }
+      };
       queueCount++;
       lastQueueAt = now;
       synth.speak(u);
@@ -130,7 +136,10 @@
   /**
    * 首次用户手势时调用：预热系统 TTS ——
    * 部分安卓浏览器必须先在人手势内 speak 过一次才出声。
+   * 同时做健康探测：预热utterance 若 2.5 秒内连 onstart 都没有
+   * （安卓/鸿蒙部分浏览器有 API 无引擎），降级为语义提示音。
    */
+  var warmupStarted = false;
   function warmup() {
     if (!ttsSupported) return;
     pickVoices();
@@ -138,8 +147,15 @@
       var u = new global.SpeechSynthesisUtterance(' ');
       u.volume = 0;
       u.lang = 'zh-CN';
+      u.onstart = function () { warmupStarted = true; };
       synth.speak(u);
     } catch (e) { /* 忽略 */ }
+    setTimeout(function () {
+      pickVoices();
+      if (!ttsVoicesReady && !warmupStarted && engine === 'tts-lang') {
+        engine = 'sfx';   // 真·无语音能力：以后播报走提示音
+      }
+    }, 2500);
   }
 
   /* ---------------- 第二层：语义音效 ---------------- */
@@ -252,6 +268,14 @@
     };
   }
 
+  /** 当前语音引擎的人类可读描述（帮助面板用，诚实呈现能力） */
+  function engineText() {
+    if (!ttsSupported) return '提示音（当前浏览器不支持语音合成）';
+    if (engine === 'tts') return '系统语音合成（中文音色）';
+    if (engine === 'tts-lang') return '系统语音合成（跟随系统设置）';
+    return '提示音（当前浏览器/设备无可用语音引擎）';
+  }
+
   global.Voice = {
     supported: ttsSupported,
     comboText: comboText,
@@ -264,6 +288,7 @@
     seatGender: seatGender,
     warmup: warmup,
     engineInfo: engineInfo,
+    engineText: engineText,
     setEnabled: setEnabled,
     isEnabled: isEnabled
   };

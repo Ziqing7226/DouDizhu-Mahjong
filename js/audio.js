@@ -32,6 +32,18 @@
     noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
     var data = noiseBuf.getChannelData(0);
     for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    // iOS：TTS 播报会抢占音频会话，WebAudio 进入 interrupted 且不自愈 ——
+    // 监听状态变化自动尝试恢复（'suspended' 属自动播放策略，交给手势兜底）
+    if (ctx.addEventListener) {
+      ctx.addEventListener('statechange', function () {
+        if (ctx.state === 'interrupted') {
+          try {
+            var p = ctx.resume();
+            if (p && p.catch) p.catch(function () { /* 失败则由下一次触摸兜底 */ });
+          } catch (e) { /* 忽略 */ }
+        }
+      });
+    }
     return ctx;
   }
 

@@ -261,6 +261,12 @@
 
   function tick() {
     if (!playing || !ac) return;
+    // iOS 上 TTS 抢占音频会话会让上下文进入 interrupted —— 每次调度顺手
+    // 尝试唤醒，恢复不了就跳过本轮（等下一次 tick），绝不在坏状态里排音符
+    if (ac.state !== 'running') {
+      try { ac.resume(); } catch (e) { /* 忽略 */ }
+      if (ac.state !== 'running') return;
+    }
     var pat = PATTERNS[mood];
     var stepDur = 60 / pat.bpm / 2;
     var now = ac.currentTime;

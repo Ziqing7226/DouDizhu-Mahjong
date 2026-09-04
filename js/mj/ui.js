@@ -193,8 +193,9 @@
     box.innerHTML =
       '<div class="avatar">' + p.avatar + '</div>' +
       '<div class="p-info">' +
-      '<div class="p-name">' + p.name +
-      (state && state.dealer === seat ? ' <span class="dealer-tag">庄</span>' : '') +
+      '<div class="p-name">' +
+      (state && state.dealer === seat ? '<span class="dealer-tag">庄</span>' : '') +
+      p.name +
       '</div>' +
       '<div class="p-meta">' + wind + '位 · 剩 <b>' + p.hand.length + '</b> 张</div>' +
       '<span class="cnt-badge">剩' + p.hand.length + '张</span>' +
@@ -211,11 +212,26 @@
 
   /* ---------------- 回合倒计时环 ----------------
    * 行动方「座位信息框」外圈的 30 秒红色圆角矩形进度环，与斗地主共用视觉。
-   * pathLength=100 归一化进度，任意框尺寸下精确；环随框伸缩（见 CSS）。 */
+   * viewBox 按框实际像素 1:1 绘制（环贴框、圆角不变形），
+   * pathLength=100 归一化进度，注入即落位当前进度。 */
 
-  var RING_PATH = 'M50 0 H88 A12 12 0 0 1 100 12 V88 A12 12 0 0 1 88 100 H12 ' +
-    'A12 12 0 0 1 0 88 V12 A12 12 0 0 1 12 0 H50 Z';   // 从顶部中点起顺时针
   var clock = null;   // { seat, endsAt, total, explicit, iv, els:{box,svg,prg} }
+
+  /** 按座位框实际像素画圆角矩形路径 */
+  function ringPathFor(box) {
+    var r = box.getBoundingClientRect();
+    var w = Math.max(20, Math.round(r.width) + 10);
+    var h = Math.max(20, Math.round(r.height) + 10);
+    var rad = Math.min(14, h / 2, w / 2);
+    return 'M' + (w / 2) + ' 0 H' + (w - rad) +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + w + ' ' + rad +
+      ' V' + (h - rad) +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + (w - rad) + ' ' + h +
+      ' H' + rad +
+      ' A' + rad + ' ' + rad + ' 0 0 1 0 ' + (h - rad) +
+      ' V' + rad +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + rad + ' 0 H' + (w / 2) + ' Z';
+  }
 
   function setTurnClock(seat, totalSec) {
     clearTurnClock();
@@ -257,6 +273,30 @@
     return (100 * (1 - frac)).toFixed(1);
   }
 
+  /** 座位框实际像素尺寸（读不到布局时用标称值兜底） */
+  function ringDims(box) {
+    var w = 110, h = 70;
+    try {
+      var r = box.getBoundingClientRect();
+      if (r && r.width > 0) w = Math.max(20, Math.round(r.width) + 10);
+      if (r && r.height > 0) h = Math.max(20, Math.round(r.height) + 10);
+    } catch (e) { /* 忽略 */ }
+    return { w: w, h: h };
+  }
+
+  /** 按尺寸画圆角矩形路径，从顶部中点顺时针一整圈 */
+  function ringPathFor(w, h) {
+    var rad = Math.min(14, h / 2, w / 2);
+    return 'M' + (w / 2) + ' 0 H' + (w - rad) +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + w + ' ' + rad +
+      ' V' + (h - rad) +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + (w - rad) + ' ' + h +
+      ' H' + rad +
+      ' A' + rad + ' ' + rad + ' 0 0 1 0 ' + (h - rad) +
+      ' V' + rad +
+      ' A' + rad + ' ' + rad + ' 0 0 1 ' + rad + ' 0 H' + (w / 2) + ' Z';
+  }
+
   function injectTurnClock(box) {
     if (!clock || !box) return;
     if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的框上
@@ -265,19 +305,17 @@
       ? function (t) { return document.createElementNS(svgNS, t); }
       : function (t) { return document.createElement(t); };   // 无 DOM 桩兜底
 
+    var dim = ringDims(box);
     var svg = mkSVG('svg');
-    svg.setAttribute('viewBox', '0 0 100 100');
-    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('viewBox', '0 0 ' + dim.w + ' ' + dim.h);
     svg.setAttribute('class', 'turn-ring');
     var trk = mkSVG('path');
-    trk.setAttribute('d', RING_PATH);
+    trk.setAttribute('d', ringPathFor(dim.w, dim.h));
     trk.setAttribute('pathLength', '100');
-    trk.setAttribute('vector-effect', 'non-scaling-stroke');
     trk.setAttribute('class', 'trk');
     var prg = mkSVG('path');
-    prg.setAttribute('d', RING_PATH);
+    prg.setAttribute('d', ringPathFor(dim.w, dim.h));
     prg.setAttribute('pathLength', '100');
-    prg.setAttribute('vector-effect', 'non-scaling-stroke');
     prg.setAttribute('class', 'prg');
     prg.style.strokeDasharray = '100';
     prg.style.strokeDashoffset = ringOffsetNow();   // 落位即当前进度
