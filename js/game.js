@@ -840,7 +840,11 @@
       {
         text: '复盘牌桌', cls: 'ghost', silent: true,
         onClick: function () {
-          UI.showRecall(UI.DOM.playArea, '查看结算', showSettle);
+          UI.showRecallChips(UI.DOM.playArea, [
+            { text: '再来一局', onClick: function () { newGame(); } },
+            { text: '📋 查看结算', onClick: showSettle },
+            { text: '换个场次', onClick: function () { enterLobby(); } }
+          ]);
         }
       },
       { text: '换个场次', cls: 'ghost', onClick: function () { UI.hideRecall(); enterLobby(); } }

@@ -204,6 +204,7 @@
     G.gen++;
     clearTimer();
     MjUI.clearTurnClock();
+    MjUI.hideTableHands();
     UI.hideRecall();
     G.settleHtml = null;
     G.phase = 'lobby';
@@ -228,6 +229,7 @@
     G.gen++;
     clearTimer();
     MjUI.clearTurnClock();
+    MjUI.hideTableHands();
     UI.hideRecall();
     G.settleHtml = null;
     G.phase = 'lobby';
@@ -249,6 +251,7 @@
     G.gen++;
     clearTimer();
     MjUI.clearTurnClock();
+    MjUI.hideTableHands();
     UI.hideRecall();
     G.settleHtml = null;
     AI.resetCache();
@@ -435,7 +438,9 @@
   /* ---------- 玩家行动 ---------- */
 
   function canDiscardNow() {
-    return G.phase === 'playing' && G.turn === 0 && !G.busy && P(0).hand.length % 3 === 2;
+    // pendingTurn：吃/碰/杠成立后到补发行牌回合落地前禁止交互
+    //（该窗口内出牌会与 AI 争抢判定竞态，lastDiscard 被消费后 applyClaim 崩溃）
+    return G.phase === 'playing' && G.turn === 0 && !G.busy && !G.pendingTurn && P(0).hand.length % 3 === 2;
   }
 
   function humanDrawAction(afterMeld) {
@@ -594,7 +599,9 @@
     return runs;
   }
 
-  /** 争抢队列：胡 > 杠 > 碰 > 吃，同级按离打牌者的下家顺序 */
+  /** 争抢队列：胡 > 杠 > 碰 > 吃，同级按离打牌者的下家顺序。
+   *  副露上限 4 组（和牌 = 4 面子 + 1 将的数学上限）：满 4 组后不可再吃/碰/杠，
+   *  胡——不受限，仍可截胡或荣和（此时手牌恰为一对将） */
   function buildClaims(fromSeat, tile) {
     var order = [(fromSeat + 1) % 4, (fromSeat + 2) % 4, (fromSeat + 3) % 4];
     var q = [];
@@ -603,17 +610,19 @@
     });
     if (G.wall.length > 0) {
       order.forEach(function (s) {
-        if (countIdx(P(s), tile.idx) === 3) q.push({ seat: s, type: 'gang' });
+        if (meldBudget(P(s)) > 0 && countIdx(P(s), tile.idx) === 3) q.push({ seat: s, type: 'gang' });
       });
     }
     order.forEach(function (s) {
-      if (countIdx(P(s), tile.idx) >= 2) q.push({ seat: s, type: 'peng' });
+      if (meldBudget(P(s)) > 0 && countIdx(P(s), tile.idx) >= 2) q.push({ seat: s, type: 'peng' });
     });
     // 吃：仅下家可吃
     var next = (fromSeat + 1) % 4;
-    chiRuns(P(next), tile.idx).forEach(function (run) {
-      q.push({ seat: next, type: 'chi', run: run });
-    });
+    if (meldBudget(P(next)) > 0) {
+      chiRuns(P(next), tile.idx).forEach(function (run) {
+        q.push({ seat: next, type: 'chi', run: run });
+      });
+    }
     return q;
   }
 
@@ -639,13 +648,18 @@
         var yes;
         if (claim.type === 'hu') yes = AI.shouldWin();
         else if (claim.type === 'gang') yes = AI.shouldKong({ difficulty: G.difficulty, wallLeft: G.wall.length });
-        else yes = AI.shouldClaimSet({
-          difficulty: G.difficulty,
-          counts: Tiles.countsOf(p.hand),
-          meldBudget: meldBudget(p),
-          unseen: unseenCounts(p.seat),
-          opponentTenpaiish: false
-        }, tile.idx, claim.type, claim.run);
+        else {
+          var claimCtx = {
+            difficulty: G.difficulty,
+            counts: Tiles.countsOf(p.hand),
+            meldBudget: meldBudget(p),
+            unseen: unseenCounts(p.seat),
+            opponentTenpaiish: false
+          };
+          // 大师完全信息：副露进张按真实牌墙余量计算（与出牌决策同构）
+          if (G.difficulty === 'master') claimCtx.unseen = exactWallUnseen();
+          yes = AI.shouldClaimSet(claimCtx, tile.idx, claim.type, claim.run);
+        }
         if (yes) applyClaim(claim, fromSeat);
         else {
           queue.shift();
@@ -875,19 +889,6 @@
 
   /* ================= 胡牌结算 ================= */
 
-  /** 局终亮牌：对手（1-3 家，含胡牌者）手牌的牌面 HTML；对局过程中从不展示 */
-  function revealHandsHtml(winnerSeat) {
-    return G.players.map(function (p) {
-      if (p.seat === 0) return '';   // 我的手牌一直可见
-      var tag = (p.seat === winnerSeat) ? '（胡）' : '';
-      var face = p.hand.length
-        ? MjUI.tilesHtml(p.hand.map(function (t) { return t.idx; }))
-        : '—';
-      return '<div class="kv reveal-kv"><span>' + p.name + tag + '</span>' +
-        '<b class="reveal-hand">' + face + '</b></div>';
-    }).join('');
-  }
-
   function doWin(winnerSeat, opts) {
     MjUI.clearTurnClock();
     UI.closeFloat();
@@ -937,7 +938,12 @@
       Store.recordGame({ role: 'mahjong', win: iWin, delta: myDelta }, 'mj');
     }
     Sound.play(iWin ? 'win' : 'lose');
-    if (typeof Voice !== 'undefined') Voice.speak(iWin ? '我胡了' : w.name + '胡了', Voice.seatGender(winnerSeat), 'vHu');
+    if (typeof Voice !== 'undefined') {
+      // 别家胡牌按「方位 + 胡了」播报（与座位胶囊上的风位一致，相对庄家），
+      // 固定短语可预录制，避免动态玩家名落入系统合成
+      Voice.speak(iWin ? '我胡了' : MjUI.seatWind(winnerSeat, G.dealer) + '位胡了',
+        Voice.seatGender(winnerSeat), 'vHu');
+    }
     MjUI.bubble(winnerSeat, '胡 !', 'win');
     log('—— ' + w.name + ' 胡 ' + Tiles.labelOf(winTile.idx) + '（' + score.fan + ' 番）——', true);
 
@@ -955,20 +961,18 @@
       '<div class="kv"><span>番种</span><b>' + score.names.join(' · ') + '</b></div>' +
       '<div class="kv"><span>番数</span><b>' + score.fan + ' 番（' + unit + ' 分）</b></div>';
 
-    // 局终亮牌：展示对手（含胡牌者）的手牌（对局过程中不显示）。
-    // 可折叠：桌面默认展开，手机横屏默认收起（保证结算面板免拖动）
-    var revealOpen = document.body.classList.contains('is-mobile') ? '' : ' open';
-    var revealRows = revealHandsHtml(winnerSeat);
+    // 局终亮牌：对手（含胡牌者）手牌亮到牌桌上各自座位对应位置
+    //（我方手牌在手牌区本就可见，不重复）
+    MjUI.showTableHands([1, 2, 3].map(function (s) { return { seat: s, tiles: P(s).hand }; }));
 
-    /* 结算面板：加宽双栏（明细 | 各家得失），亮牌可折叠；删累计战绩（📊 可查看）；
-     * 「复盘牌桌」隐藏面板回看牌桌终态（UI.showRecall 呼出） */
+    /* 结算面板：加宽双栏（明细 | 各家得失）；亮牌已上桌不再占面板；
+     * 「复盘牌桌」隐藏面板回看牌桌终态（胶囊组呼出） */
     G.settleHtml =
       '<div class="settle-title ' + (iWin ? 'win' : 'lose') + '">' +
       (iWin ? '我胡了！' : w.name + ' 胡') + '</div>' +
       '<div class="settle-grid">' +
       '<div class="sec"><h4>本局明细</h4>' + detailRows + '</div>' +
       '<div class="sec"><h4>各家得失</h4>' + scoreRows + '</div>' +
-      (revealRows ? '<details class="reveal-box"' + revealOpen + '><summary>亮牌 · 各家手牌</summary>' + revealRows + '</details>' : '') +
       '</div>';
     showSettle();
     renderAll();
@@ -982,7 +986,11 @@
       {
         text: '复盘牌桌', cls: 'ghost', silent: true,
         onClick: function () {
-          UI.showRecall(MjUI.el('mjTable'), '查看结算', showSettle);
+          UI.showRecallChips(MjUI.el('mjTable'), [
+            { text: '再来一局', onClick: function () { newGame(); } },
+            { text: '📋 查看结算', onClick: showSettle },
+            { text: '换个场次', onClick: function () { enterLobby(); } }
+          ]);
         }
       },
       { text: '换个场次', cls: 'ghost', onClick: function () { UI.hideRecall(); enterLobby(); } }
@@ -998,7 +1006,9 @@
     Sound.play('pass');
     log('—— 牌墙已尽，荒庄 ——', true);
 
-    var revealOpen2 = document.body.classList.contains('is-mobile') ? '' : ' open';
+    // 荒庄亮牌：各家手牌上桌（我方在手牌区可见）
+    MjUI.showTableHands([1, 2, 3].map(function (s) { return { seat: s, tiles: P(s).hand }; }));
+
     G.settleHtml =
       '<div class="settle-title lose">荒 庄</div>' +
       '<div class="settle-grid">' +
@@ -1006,7 +1016,6 @@
       '<div class="kv"><span>结果</span><b>牌墙摸完，无人胡牌</b></div>' +
       '<div class="kv"><span>计分</span><b>荒庄不计分</b></div>' +
       '</div>' +
-      '<details class="reveal-box"' + revealOpen2 + '><summary>亮牌 · 各家手牌</summary>' + revealHandsHtml(-1) + '</details>' +
       '</div>';
     showSettle();
     renderAll();
@@ -1053,7 +1062,8 @@
       '</div>' +
       '<div class="sec"><h4>番种与计分</h4>' +
       '<p>平胡 1 番起，累加：自摸 +1、门清 +1、杠上开花 +1、抢杠胡 +1、' +
-      '碰碰胡 +2、混一色 +2、七对 +3、清一色 +4、字一色 +6、地胡 +3、天胡 +6、十三幺 +13。</p>' +
+      '碰碰胡 +2、混一色 +2、七对 +3、清一色 +4、字一色 +6、地胡 +3、天胡 +6；' +
+      '十三幺计 13 番（已含底番）。</p>' +
       '<p>得分 = 底分（100）× 总番数；自摸三家各付，点炮由点炮者付；庄家参与结算时翻倍。</p>' +
       '</div>' +
       '<div class="sec"><h4>操作</h4>' +
@@ -1096,14 +1106,15 @@
     if (G.phase !== 'playing') return;
     if (G.busy) {
       // 争抢浮层挂起 → 视为过，继续处理后续争抢
+      //（抢杠询问走 resolveRob 自己的流程，不经 activeClaim）
       if (G.activeClaim) {
         var ac = G.activeClaim;
         G.activeClaim = null;
         G.busy = false;
         UI.closeFloat();
         UI.toast('超时，自动过');
-        if (ac.jiagang) ac.pass();          // 放弃抢杠 → 继续加杠流程
-        else { ac.queue.shift(); resolveClaim(ac.queue, ac.fromSeat); }
+        ac.queue.shift();
+        resolveClaim(ac.queue, ac.fromSeat);
       }
       return;
     }

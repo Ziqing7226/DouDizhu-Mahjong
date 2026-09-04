@@ -12,8 +12,10 @@
  * 难度档与斗地主同构：
  *   easy   「新手」出牌只看单张价值，副露全凭心血来潮，不数进张
  *   hard   「高手」最小向听 + 最大进张（受入牌）选择打牌，副露以向听改善为准
- *   master 「大师」在高手之上加入防守（他家似听牌时避开生张/中张）、
- *          吃碰选择比较进张质量、杠前确认岭上有牌
+ *   master 「大师」完全信息（看穿他家手牌与真实牌墙）：攻防随自己向听
+ *          动态切换——听牌全力避炮、一向听偏防守、两向听以上纯进攻，
+ *          点炮必死张恒定重罚；平级副露更积极（进张 0.85 阈值）；
+ *          进张按真实牌墙余量计算
  * 纯逻辑模块，可在 Node 中直接 require 做单元测试。
  * ========================================================================== */
 (function (global) {
@@ -140,6 +142,27 @@
 
     // 第二轮：只对向听最优的候选算进张（避免 14×34 次向听全算）
     var finalists = cands.filter(function (x) { return x.shanten === bestSh; });
+    // 大师攻防随向听切换：听牌全力避炮，离听越远越偏进攻。
+    // 防守在自身离和牌尚远时毫无价值，只会拖慢自己（旧版恒 2.2 导致
+    // 大师「只守不攻」，实测强度与高手持平）。
+    var dw = 0.6;
+    if (ctx.difficulty === 'master') {
+      if (bestSh <= 0) dw = 2.6;        // 听牌：避炮收益最大
+      else if (bestSh === 1) dw = 1.6;  // 一向听：偏防守
+      else if (bestSh === 2) dw = 0.6;  // 两向听：进攻优先
+      else dw = 0;                       // 三向听以上：纯效率进攻
+    }
+    // 竞速模式：完全信息下已知他家有人听牌 → 进张权重加码，
+    // 全力抢在听牌家之前和牌（直接压缩对手的获胜窗口）
+    var raceMode = false;
+    if (ctx.difficulty === 'master' && ctx.hands) {
+      for (var s2 = 0; s2 < ctx.hands.length; s2++) {
+        if (s2 === ctx.seat) continue;
+        var ob = 4 - (ctx.meldCounts ? (ctx.meldCounts[s2] || 0) : 0);
+        if (cachedShanten(Tiles.countsOf(ctx.hands[s2]), ob) === 0) { raceMode = true; break; }
+      }
+    }
+    var uw = (ctx.difficulty === 'master' && raceMode) ? 3 : 2;
     for (t = 0; t < finalists.length; t++) {
       var f = finalists[t];
       if (ctx.difficulty === 'easy') {
@@ -148,8 +171,9 @@
         f.ukeire = Rules.ukeire(c, budget, f.drop, unseen);
       }
       f.danger = dangerOf(f.drop, ctx);
-      // 大师：点炮必死的张直接顶格危险（除非别无选择）
-      if (deadly && deadly[f.drop]) f.danger = 100;
+      // 大师：点炮必死的张独立重罚，不随进攻模式衰减——
+      // 自己胡不了更不能点炮，这张牌任何向听下都不该打
+      f.deadly = !!(deadly && deadly[f.drop]);
       f.keep = keepValue(c, f.drop);
     }
 
@@ -158,12 +182,12 @@
       if (ctx.difficulty === 'easy') {
         return (b.keep + Math.random() * 3) - (a.keep + Math.random() * 3);
       }
-      // 高手/大师：进张优先；大师在意危险度，高手只做轻微规避
-      var dw = ctx.difficulty === 'master' ? 2.2 : 0.6;
-      var da = (ctx.opponentTenpaiish ? dw * a.danger : 0.3 * a.danger);
-      var db = (ctx.opponentTenpaiish ? dw * b.danger : 0.3 * b.danger);
-      var va = a.ukeire.count * 2 - da + a.keep * 0.3;
-      var vb = b.ukeire.count * 2 - db + b.keep * 0.3;
+      // 高手/大师：进张优先（大师竞速模式下加码）；危险度按上方的
+      // 攻防权重折算，点炮必死张另计固定大罚分（恒定，不随攻防模式衰减）
+      var da = (ctx.opponentTenpaiish ? dw * a.danger : 0.3 * a.danger) + (a.deadly ? 30 : 0);
+      var db = (ctx.opponentTenpaiish ? dw * b.danger : 0.3 * b.danger) + (b.deadly ? 30 : 0);
+      var va = a.ukeire.count * uw - da + a.keep * 0.3;
+      var vb = b.ukeire.count * uw - db + b.keep * 0.3;
       return vb - va;
     });
     return finalists.concat(cands.filter(function (x) { return x.shanten !== bestSh; }));
@@ -219,11 +243,12 @@
     }
     if (s1 < s0) return true;
     if (s1 === s0) {
-      // 平级副露：只在进张不变差且是大师时才做（加快推进）
+      // 平级副露：大师在进张不明显变差时更积极地碰吃推进
+      //（0.85 阈值：允许小幅进张损失换取副露推进与局面压迫）
       if (ctx.difficulty !== 'master') return false;
       var u0 = Rules.ukeire(ctx.counts, ctx.meldBudget, null, ctx.unseen);
       var u1 = Rules.ukeire(c1, ctx.meldBudget - 1, null, ctx.unseen);
-      return u1.count >= u0.count * 0.9;
+      return u1.count >= u0.count * 0.85;
     }
     return false;
   }
@@ -244,7 +269,8 @@
    */
   function selfCheck(ctx) {
     var res = { win: Rules.isWin(ctx.counts, ctx.meldBudget), gangIdx: -1, jiagangIdx: -1 };
-    if (!res.win) {
+    // 副露上限 4 组：满编后不再暗杠/加杠（meldBudget = 4 − 副露数 ≤ 0）
+    if (!res.win && ctx.meldBudget > 0) {
       var i;
       for (i = 0; i < 34; i++) {
         if (ctx.counts[i] === 4) { res.gangIdx = i; break; }

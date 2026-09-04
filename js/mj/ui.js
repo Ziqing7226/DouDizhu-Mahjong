@@ -22,7 +22,7 @@
 
   var DOM = {};
   function bindDom() {
-    ['mjView', 'mjHand', 'mjWallInfo', 'mjInfoList', 'mjScoreList', 'mjLogList',
+    ['mjView', 'mjTable', 'mjHand', 'mjWallInfo', 'mjInfoList', 'mjScoreList', 'mjLogList',
       'mjCounterGrid', 'mjLobby',
       'mjBtnDiscard', 'mjBtnHint', 'mjBtnHu', 'mjBtnGang'
     ].forEach(function (id) { DOM[id] = el(id); });
@@ -421,6 +421,57 @@
   function renderWall(n, rounds) {
     DOM.mjWallInfo.textContent = '牌墙余 ' + n + ' 张' +
       (rounds ? ' · 第 ' + rounds + ' 巡' : '');
+    // 亮牌上桌期间保持隐藏（renderAll 在结算后仍会调用本函数）
+    DOM.mjWallInfo.style.display = handsShown ? 'none' : '';
+  }
+
+  /** 局终亮牌：各家手牌亮到牌桌上「贴近各自边缘」的一侧，方向与各家牌河一致；
+   *  牌河向桌心让位（加 reveal-shift 类）。我方手牌在手牌区本就可见，不重复。
+   *  结算期同时隐藏中央牌墙指示避免争位；牌留在桌上直到下一局。 */
+  var handsShown = false;
+  function showTableHands(hands) {
+    hideTableHands();
+    handsShown = true;
+    if (global.document && global.document.body) global.document.body.classList.add('reveal-mode');
+    DOM.mjWallInfo.style.display = 'none';
+    for (var s = 1; s <= 3; s++) {
+      var rv = DOM.rivers && DOM.rivers[s];
+      if (rv) rv.classList.add('reveal-shift');
+    }
+    if (DOM.melds) {
+      for (var m = 1; m <= 3; m++) {
+        if (DOM.melds[m]) DOM.melds[m].classList.add('reveal-shift');
+      }
+    }
+    (hands || []).forEach(function (item) {
+      if (item.seat === 0 || !item.tiles || !item.tiles.length) return;
+      var wrap = document.createElement('div');
+      wrap.className = 'remain-tiles remain-mj-' + item.seat;
+      // tiles 为手牌对象数组 {idx,id}；tileEl 兼容纯 idx，两种口径都能出牌面
+      Tiles.sortTiles(item.tiles.slice()).forEach(function (t) {
+        var el = tileEl(t);
+        el.classList.add('remain-mj');
+        wrap.appendChild(el);
+      });
+      DOM.mjTable.appendChild(wrap);
+    });
+  }
+
+  function hideTableHands() {
+    handsShown = false;
+    if (global.document && global.document.body) global.document.body.classList.remove('reveal-mode');
+    var old = DOM.mjTable ? DOM.mjTable.querySelectorAll('.remain-tiles') : [];
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    for (var s = 1; s <= 3; s++) {
+      var rv = DOM.rivers && DOM.rivers[s];
+      if (rv) rv.classList.remove('reveal-shift');
+    }
+    if (DOM.melds) {
+      for (var m = 1; m <= 3; m++) {
+        if (DOM.melds[m]) DOM.melds[m].classList.remove('reveal-shift');
+      }
+    }
+    if (DOM.mjWallInfo) DOM.mjWallInfo.style.display = '';
   }
 
   /* ---------------- 气泡 ---------------- */
@@ -526,10 +577,12 @@
     setTileClickHandler: setTileClickHandler,
     renderRiver: renderRiver, renderWall: renderWall,
     renderMelds: renderMelds,
+    showTableHands: showTableHands, hideTableHands: hideTableHands,
     bubble: bubble, clearBubbles: clearBubbles,
     renderCounter: renderCounter, renderInfo: renderInfo,
     renderScore: renderScore, renderLogs: renderLogs,
     setActions: setActions, setHintVisible: setHintVisible,
+    seatWind: function (seat, dealer) { return WIND[(seat - (dealer || 0) + 4) % 4]; },
     setTurnClock: setTurnClock, tickTurnClock: tickTurnClock, clearTurnClock: clearTurnClock,
     showLobby: showLobby, hideLobby: hideLobby, highlightRooms: highlightRooms,
     G: G

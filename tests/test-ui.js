@@ -511,8 +511,19 @@ function playOneGame(maxFlush) {
     return { err: '在 ' + maxFlush + ' 步内未结束 phase=' + G.phase + ' | ' + snapshot() };
   }
   results.games++;
+  if (scanUndefined()) results.undefinedSeen = (results.undefinedSeen || 0) + 1;
   results.steps.push(steps);
   return { ok: true, steps, sawPlaying };
+}
+
+/** 全树递归扫描渲染文本/HTML 里的 "undefined"（createElement 构建的节点也要覆盖） */
+function scanUndefined() {
+  const all = descendants(body);
+  for (const el of all) {
+    if ((el._html && el._html.includes('undefined')) ||
+        (el._text && el._text.includes('undefined'))) return true;
+  }
+  return false;
 }
 
 // 允许每局最多 4000 次调度
@@ -536,11 +547,12 @@ ok(ctx.App.current === 'ddz', 'App.current 应为 ddz');
 // 选场大厅：点「高手场」开启首局
 const lobbyEl = registry.lobby;
 ok(!!lobbyEl && lobbyEl.classList.contains('show'), '首局开始前应停在选场大厅');
-const firstRoom = lobbyEl && lobbyEl.querySelectorAll('button').find(b => b.dataset.d === 'hard');
+const AI_DIFF = process.env.AI_DIFF || 'easy';
+const firstRoom = lobbyEl && lobbyEl.querySelectorAll('button').find(b => b.dataset.d === (process.env.AI_DIFF ? AI_DIFF : 'hard'));
 ok(!!firstRoom, '大厅缺少高手场按钮');
 click(firstRoom);
 ok(!lobbyEl.classList.contains('show'), '选好场次后大厅应隐藏');
-ok(G.difficulty === 'hard', '选场后难度应为 hard，实际 ' + G.difficulty);
+ok(G.difficulty === (process.env.AI_DIFF || 'hard'), '选场后难度应为 ' + (process.env.AI_DIFF || 'hard') + '，实际 ' + G.difficulty);
 ok(G.phase === 'bidding', '选场后应进入叫分阶段，实际 ' + G.phase);
 flushOne();
 
@@ -619,7 +631,7 @@ console.log('\n=== 麻将冒烟 ===');
   ok(G2.phase === 'lobby', '麻将初始应为 lobby，实际 ' + G2.phase);
 
   // 选新手场开局
-  const mjRoom = mjLobbyEl.querySelectorAll('button').find(b => b.dataset.d === 'easy');
+  const mjRoom = mjLobbyEl.querySelectorAll('button').find(b => b.dataset.d === (process.env.AI_DIFF || 'easy'));
   ok(!!mjRoom, '麻将大厅缺少新手场按钮');
   click(mjRoom);
   ok(G2.phase === 'playing', '麻将选场后应进入对局，实际 ' + G2.phase);
@@ -654,6 +666,11 @@ console.log('\n=== 麻将冒烟 ===');
     ' wall=' + G2.wall.length + ' hands=' + G2.players.map(p => p.hand.length).join(',') + '）');
   ok(G2.phase === 'over', '麻将终局阶段应为 over，实际 ' + G2.phase);
   ok(registry.overlay.classList.contains('show'), '麻将终局应弹出结算面板');
+  // 副露上限：和牌 = 4 面子 + 1 将，任何一家满 4 组后不得再吃/碰/杠
+  ok(G2.players.every(p => p.melds.length <= 4),
+    '每家副露不得超过 4 组，实际 ' + G2.players.map(p => p.melds.length).join(','));
+  // 终局亮牌上桌后全树扫 undefined（亮牌区由 createElement 构建，innerHTML 扫描看不到）
+  ok(!scanUndefined(), '麻将终局亮牌/结算渲染不应出现 "undefined"');
   const mjSwap = registry.dialog.querySelectorAll('.btn').find(b => b.textContent === '换个场次');
   ok(!!mjSwap, '麻将结算面板缺少「换个场次」按钮');
   click(mjSwap);
@@ -1228,6 +1245,7 @@ for (let i = 2; i <= 5; i++) {
  * ============================================================ */
 
 function report() {
+  if (results.undefinedSeen) console.log("  ⚠ 渲染 HTML 中出现 undefined ×" + results.undefinedSeen);
   console.log('\n' + '='.repeat(60));
   if (fail === 0) {
     console.log(`✅ 全部通过：${pass} 项断言`);

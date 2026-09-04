@@ -208,6 +208,25 @@ body {
 
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 
+/* 顶栏居中时钟：24 小时制 HH:MM，绝对定位居中不参与两侧布局 */
+.topbar {
+  position: relative;
+}
+.topbar-clock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  font-variant-numeric: tabular-nums;
+  color: #ffe9b8;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  pointer-events: none;
+}
+.is-mobile .topbar-clock { font-size: 14px; letter-spacing: 2px; }
+
 .main {
   flex: 1;
   display: flex;
@@ -342,10 +361,11 @@ body {
   border: 1px solid rgba(255, 230, 180, .55);
 }
 
-/* 局终复盘：输家余牌亮在各自座位对应的角落（自动换行多排） */
+/* 局终复盘：输家余牌亮在各自座位对应的角落（自动换行多排）；
+ * top 预留下移量避开座位胶囊与其外圈倒计时环 */
 .remain-cards {
   position: absolute;
-  top: 78px;
+  top: 100px;
   max-width: 300px;
   display: flex;
   flex-wrap: wrap;
@@ -755,35 +775,22 @@ body {
   align-items: start;
 }
 .settle-grid .sec { margin: 0; }
-.settle-grid .reveal-box { grid-column: 1 / -1; }
-.reveal-box summary {
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  font-size: 13px;
-  color: var(--gold-lt);
-  letter-spacing: 2px;
-  border-left: 3px solid var(--gold);
-  padding-left: 8px;
-  margin: 0 0 6px;
-  font-weight: 800;
-}
-.reveal-box summary::-webkit-details-marker { display: none; }
-.reveal-box summary::after { content: '▸'; margin-left: 6px; transition: transform .15s; display: inline-block; }
-.reveal-box[open] summary::after { transform: rotate(90deg); }
-.reveal-box summary:hover { color: #fff; }
-.reveal-box[open] summary { margin-bottom: 2px; }
 
-/* 复盘呼出胶囊：结算面板隐藏后，牌桌中央的半透明按钮 */
-.recall-chip {
+
+/* 复盘呼出胶囊组：结算面板隐藏后，牌桌中央的三枚半透明胶囊
+ * [再来一局] [查看结算] [换个场次]，半透明不遮挡复盘内容 */
+.recall-group {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+  display: flex;
+  gap: 14px;
   z-index: 40;
+}
+.recall-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
   padding: 10px 24px;
   border-radius: 26px;
   border: 1.5px solid rgba(255, 233, 168, .75);
@@ -795,12 +802,13 @@ body {
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .12);
   transition: background .15s, transform .15s;
+  white-space: nowrap;
 }
 .recall-chip:hover {
   background: rgba(74, 11, 8, .82);
-  transform: translate(-50%, -50%) scale(1.05);
+  transform: scale(1.05);
 }
-.recall-chip:active { transform: translate(-50%, -50%) scale(.97); }
+.recall-chip:active { transform: scale(.97); }
 .dialog .sec h4 {
   margin: 0 0 6px;
   font-size: 13px;
@@ -815,21 +823,6 @@ body {
 .dialog .kv b.plus { color: #7ddc8a; }
 .dialog .kv b.minus { color: #ff6b5b; }
 
-/* 局终亮牌：各家手牌用小牌面展示 */
-.dialog .kv.reveal-kv { align-items: center; }
-.dialog .kv b.reveal-hand {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  justify-content: flex-end;
-  max-width: 350px;
-}
-.dialog .kv b.reveal-hand .mtile {
-  width: 24px;
-  height: 33px;
-  font-size: 10.5px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
-}
 .dialog .actions { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
 
 .settle-title {
@@ -1477,7 +1470,7 @@ body {
 .mj-melds-2 { top: 72px; left: calc(50% + 138px); }
 .mj-melds-1 { top: 50%; right: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
 .mj-melds-3 { top: 50%; left: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
-.mj-melds-0 { bottom: 174px; left: 14px; max-width: 260px; }   /* 我的座位胶囊上方 */
+.mj-melds-0 { bottom: 120px; right: calc(50% + 138px); max-width: 260px; }   /* 我方胶囊右侧、紧贴我河左缘（3px），随河居中锚定 */
 
 /* 牌墙余数 / 巡目：桌心一行小字（主流惯例：中央信息克制） */
 .mj-wall-info {
@@ -1508,15 +1501,15 @@ body {
 /* 操作按钮：牌桌右下角竖排窄条，避免与宽手牌重叠 */
 .mj-actions {
   position: absolute;
-  right: 10px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  width: 66px;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 150px;
   z-index: 8;
 }
-.mj-actions .btn { min-width: 0; padding: 7px 0; font-size: 14px; }
+.mj-actions .btn { min-width: 0; padding: 10px 0; font-size: 15px; }
 
 .mj-hand {
   display: flex;
@@ -1636,7 +1629,7 @@ body {
 .is-mobile .mj-seat { padding: 5px 7px; gap: 6px; }
 .is-mobile .mj-seat .p-info { display: block; min-width: 0; }
 .is-mobile .mj-seat .p-name {
-  max-width: 76px;
+  max-width: 160px;   /* 长名字完整显示；硬上限由座位胶囊 max-width 兜底 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1663,20 +1656,96 @@ body {
 .is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 138px; height: 207px; }
 .is-mobile .rv-cell { width: 44px; height: 32px; }
 .is-mobile .mj-river-2 { top: 70px; left: 50%; transform: translateX(-50%); }
-/* 侧河上移避开底部胶囊，右河左移让出操作按钮竖条 */
-.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 44%; transform: translateY(-50%); }
-.is-mobile .mj-river-1 { right: 104px; }
-.is-mobile .mj-river-0 { bottom: 112px; }
+/* 侧河与其副露条同轴（top 43%，末行横置牌外溢量计入），河贴边、副露紧随其内侧 */
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 43%; transform: translateY(-50%); }
+/* 侧河对称贴边（右河的 104px 是旧竖排按钮时代遗留，2×2 按钮后不再需要） */
+.is-mobile .mj-river-1 { right: 12px; }
+.is-mobile .mj-river-0 { bottom: 100px; }
 .is-mobile .mj-melds-strip { max-width: 150px; }
-.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 112px); }
-.is-mobile .mj-melds-1 { top: 44%; right: 250px; transform: translateY(-50%); max-height: 207px; }
-.is-mobile .mj-melds-3 { top: 44%; left: 158px; transform: translateY(-50%); max-height: 207px; }
-/* 我的副露与我的胶囊同排（胶囊右侧），不再向上挤占牌河空间 */
-.is-mobile .mj-melds-0 { bottom: 112px; left: 200px; max-width: 160px; }
-.is-mobile .mj-actions { width: 84px; gap: 9px; }
-.is-mobile .mj-actions .btn { padding: 11px 0; font-size: 16px; }
+/* 对家副露跟在河右侧：单列窄条（限宽 84，一组一行）；碰的横牌标来源
+ * 会向左溢出 5px，间距已计入 */
+.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 112px); max-width: 84px; }
+/* 侧家副露：限高 200（任何副露组合下容器高 ≤156，底部不进我方副露带）、
+ * 限宽 132（极端 4 列也包住，右家条右锚定自动向左生长，不横溢撞河）；
+ * 间隙以「满河时最近牌面」为基准收到安全极限（横牌溢出 5px 已计入） */
+.is-mobile .mj-melds-1 { top: 43%; right: 158px; transform: translateY(-50%); max-height: 200px; max-width: 132px; }
+.is-mobile .mj-melds-3 { top: 43%; left: 158px; transform: translateY(-50%); max-height: 200px; max-width: 132px; }
+/* 我的副露与我的胶囊同排，与牌河留 3px（两碰可单行）；胶囊底边与副露/河对齐 */
+.is-mobile .mj-melds-0 { bottom: 104px; left: 315px; right: auto; max-width: 176px; }
+.is-mobile .mj-seat-0 { bottom: 104px; }
+/* 侧家座位胶囊放开长度：长名字完整显示（横向空间充足） */
+.is-mobile .mj-seat-1, .is-mobile .mj-seat-3 { max-width: 240px; }
+.is-mobile .mj-seat-2 { max-width: 380px; }
 .is-mobile .mj-seat .avatar { width: 46px; height: 46px; font-size: 23px; }
 .is-mobile .mj-wall-info { top: 45%; font-size: 12px; }
+
+/* ---------------- 局终亮牌：贴各边摆放，方向与各家牌河一致 ----------------
+ * 对家横排在顶边（牌面倒置）、左右两家竖排贴两侧边（牌横置朝桌心），
+ * 位置贴各自边缘；对应牌河加 .reveal-shift 向桌心让位。
+ * 结算期隐藏中央牌墙指示（见 mj/ui.js），避免与亮牌争位。 */
+.remain-tiles {
+  position: absolute;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  z-index: 3;
+}
+.remain-tiles .mtile {
+  width: 30px;
+  height: 42px;
+  font-size: 14px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .35);
+  transform: rotate(var(--rot, 0deg));
+}
+.remain-mj-2 { --rot: 180deg; top: 72px; }
+.remain-mj-1 { --rot: -90deg; flex-direction: column; align-items: center; }
+.remain-mj-3 { --rot: 90deg; flex-direction: column; align-items: center; }
+/* 竖排列：横置牌视觉高(30)小于元素盒(42)，负外边距收紧让牌面相接 */
+.remain-mj-1 .mtile, .remain-mj-3 .mtile { margin: -6px 0; }
+
+.remain-mj-2 {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.remain-mj-1 { right: 10px; top: calc(50% - 233px); }
+.remain-mj-3 { left: 10px; top: calc(50% - 233px); }
+
+/* 牌河让位：向桌心移动，给边缘亮牌腾位；对家副露随河下移 */
+.mj-river-2.reveal-shift { top: 120px; }
+.mj-river-1.reveal-shift { right: 58px; }
+.mj-river-3.reveal-shift { left: 58px; }
+.mj-melds-2.reveal-shift { top: 192px; }
+/* 两侧副露条随牌河一起让位，避免被位移后的牌河压住 */
+.mj-melds-1.reveal-shift { right: 236px; }
+.mj-melds-3.reveal-shift { left: 236px; }
+
+/* 复盘态：我方胶囊（含庄标）全局让位；桌面亮牌列纵贯我方区域，
+ * 我方副露条（左缘 x 14 起）会与左列相碰，一并隐藏。
+ * 手机端亮牌列贴左右边缘、不经过我方副露带，副露保留不动。
+ * （reveal-mode 类挂在 body 上，须用复合选择器而非后代） */
+.reveal-mode .mj-seat-0 { display: none; }
+body:not(.is-mobile).reveal-mode .mj-melds-0 { display: none; }
+
+.is-mobile .remain-tiles .mtile { width: 24px; height: 30px; font-size: 11px; }
+.is-mobile .remain-mj-2 { top: 46px; }
+.is-mobile .remain-mj-1, .is-mobile .remain-mj-3 { top: 76px; }
+/* 复盘让位量：河向桌心挪后，侧家副露条同步跟进收紧（牌面级间隙 6~14px） */
+.is-mobile .mj-river-2.reveal-shift { top: 100px; }
+.is-mobile .mj-melds-2.reveal-shift { top: 96px; }
+.is-mobile .mj-melds-3.reveal-shift { left: 210px; }
+.is-mobile .mj-melds-1.reveal-shift { right: 216px; }
+/* 复盘精简对方胶囊：只留名字（+庄标），压低顶带高度 */
+.is-mobile.reveal-mode .mj-seat-1, .is-mobile.reveal-mode .mj-seat-2, .is-mobile.reveal-mode .mj-seat-3 { padding: 3px 8px; }
+.is-mobile.reveal-mode .mj-seat-1 .avatar, .is-mobile.reveal-mode .mj-seat-2 .avatar, .is-mobile.reveal-mode .mj-seat-3 .avatar,
+.is-mobile.reveal-mode .mj-seat-1 .cnt-badge, .is-mobile.reveal-mode .mj-seat-2 .cnt-badge, .is-mobile.reveal-mode .mj-seat-3 .cnt-badge { display: none; }
+
+/* 操作按钮 2×2 已上收为共享规则；手机端手牌为宽按钮块让位 */
+.is-mobile .mj-hand { margin-right: 150px; }
+/* 手机端副露小牌放大 */
+.is-mobile .mtile.mini { width: 26px; height: 36px; font-size: 12px; }
+
+
 
 /* ---- 争抢浮层：按钮更大更顺拇指 ---- */
 .is-mobile .float-panel { top: 60%; padding: 16px 20px; }
@@ -1697,12 +1766,11 @@ body {
 /* 手机横屏高度有限：结算面板整体紧凑一档，确保免拖动 */
 .is-mobile .dialog.wide { padding: 12px 14px; }
 .is-mobile .dialog.wide .kv { padding: 2px 0; font-size: 12px; }
-.is-mobile .dialog.wide .kv b.reveal-hand { max-width: 300px; font-size: 11px; }
 .is-mobile .dialog.wide .settle-grid { gap: 0 12px; }
 .is-mobile .dialog.wide .settle-title { font-size: 26px; }
 .is-mobile .dialog.wide .actions { margin-top: 8px; }
-/* 手机端余牌角落容器：牌更小、贴边更近 */
-.is-mobile .remain-cards { top: 64px; max-width: 190px; gap: 6px 4px; }
+/* 手机端余牌角落容器：下移避开座位胶囊与倒计时环，牌更小、贴边更近 */
+.is-mobile .remain-cards { top: 96px; max-width: 190px; gap: 6px 4px; }
 .is-mobile .remain-cards.remain-2 { left: 12px; }
 .is-mobile .remain-cards.remain-1 { right: 12px; }
 .is-mobile .remain-cards .card { width: 32px; height: 44px; border-radius: 4px; }
@@ -1711,6 +1779,5 @@ body {
 .is-mobile .remain-cards .card .big { font-size: 13px; }
 .is-mobile .remain-cards .card.joker .big { font-size: 11px; }
 .is-mobile .dialog .btn { min-width: 104px; padding: 11px 18px; font-size: 15px; }
-.is-mobile .dialog .kv b.reveal-hand { max-width: 300px; }
 .is-mobile .settle-title { font-size: 32px; }
 .is-mobile .toast { top: 58px; font-size: 13px; }

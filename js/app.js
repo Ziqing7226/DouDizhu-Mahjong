@@ -28,9 +28,22 @@
 
   function bindDom() {
     ['gameLobby', 'btnGameMode', 'logoText', 'ddzView', 'mjView',
-      'btnFullscreen', 'btnCounter', 'counterDrop', 'fsBanner', 'btnFsGo', 'btnFsClose'].forEach(function (id) {
+      'btnFullscreen', 'btnCounter', 'counterDrop', 'topClock', 'fsBanner', 'btnFsGo', 'btnFsClose'].forEach(function (id) {
       DOM[id] = el(id);
     });
+  }
+
+  /* ---------------- 顶栏时钟（24 小时制 HH:MM，每 15 秒对齐一次） ---------------- */
+
+  function syncTopClock() {
+    if (!DOM.topClock) return;
+    var d = new Date();
+    DOM.topClock.textContent =
+      ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+  function startClock() {
+    syncTopClock();
+    setInterval(syncTopClock, 15000);
   }
 
   /** 打开模式大厅：挂起当前游戏、显示选择层 */
@@ -120,7 +133,7 @@
   }
 
   function syncFsButton() {
-    DOM.btnFullscreen.textContent = fsElement() ? '⛶' : '⛶';
+    // 状态用 .off 类表达（样式层切换明暗），文本恒为同一图标
     DOM.btnFullscreen.classList.toggle('off', !!fsElement());
   }
 
@@ -206,6 +219,9 @@
 
     // 顶栏 📋：记牌器 / 余牌器下拉面板（两个游戏共用，按模式显隐）
     bindCounterDrop();
+
+    // 顶栏居中时钟（24 小时制）
+    startClock();
 
     // 温馨提醒：进入游戏即记下「记忆时刻」
     Health.remember();

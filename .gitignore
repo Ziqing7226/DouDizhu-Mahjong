@@ -7,3 +7,6 @@ Thumbs.db
 desktop.ini
 .test-server.ps1
 .fuzz.js
+node_modules
+package-lock.json
+.zcode/

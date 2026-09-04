@@ -8,175 +8,122 @@
  */
 
 /* ==========================================================================
- * voice.js —— 出牌语音播报（两级引擎 + 严格中文路由）
+ * voice.js —— 出牌语音播报（预录制音频包 + 语义音效兜底，两层引擎）
  *
- * 1. 系统 TTS（Web Speech API）：
- *    a) 检测到中文音色 → 显式指定音色播报（音质最好，可分男女声）；
- *    b) 音色列表为空（安卓 Chrome 平台特性：getVoices() 常返回空列表，
- *       但设置 utterance.lang='zh-CN' 后系统会路由到自带中文引擎）
- *       → 「lang-only」模式播报，仍由系统 TTS 发标准普通话。
- *    音色列表异步就绪（voiceschanged）后自动升级 / 恢复到 a)。
- * 2. 语义音效（audio.js 实时合成）：浏览器完全没有 speechSynthesis 时，
- *    每个事件用独立辨识音（叫分叮、对子双击、炸弹轰、胡牌锣……）。
+ * 0. 预录制音频包（js/voice/*.mp3，Edge TTS YunxiaNeural 生成）：
+ *    首次用户手势时批量 fetch + decodeAudioData 预加载到内存。
+ *    播报时按文本精确匹配播放，全平台一致、零延迟、标准普通话。
+ *    男声座位用 playbackRate 0.85 变调。全部播报均为静态短语（107 条），
+ *    动态内容（如别家胡牌）也由「方位+胡了」等固定短语覆盖。
+ * 1. 语义音效（audio.js 合成）：音频包未加载完成 / 缺文件时的兜底。
  *
- * 历史教训（为什么不再用 meSpeak/eSpeak 本地合成）：
- *   eSpeak 的中文是共振峰合成，四声渲染缺失、双元音断裂
- *   （espeak-ng #1370/#1028/#1275），在手机上听感近似乱码，
- *   且其同步合成阻塞主线程——曾导致安卓端「播报即卡顿」。
- *   参数调优无法修复引擎级缺陷，故整层移除。
- *
- * 防乱码铁律：中文文本绝不交给非中文音色（宁可不出声也不出怪音）。
- *
- * iPad / iOS 注意：系统静音键（侧边开关）会屏蔽 WebAudio 与 TTS，
- * 属硬件行为，代码无法绕过，请检查静音键。
+ * 历史：曾用 meSpeak/eSpeak 本地合成（共振峰合成，中文四声缺失听感
+ * 近似乱码 + 同步合成阻塞主线程导致安卓卡顿），已整层移除；
+ * 系统 TTS 层在播报全部静态化后亦已移除（音色/时延不可控，
+ * 且预录制包可 100% 覆盖播报文本）。
  * ========================================================================== */
 (function (global) {
   'use strict';
 
-  var synth = global.speechSynthesis || null;
-  var ttsSupported = !!(synth && global.SpeechSynthesisUtterance);
   var enabled = true;
 
-  /* 引擎状态：'tts'（有中文音色）→ 'tts-lang'（有 synth、音色列表空，靠 lang 路由）
-   * → 'sfx'（无 speechSynthesis）。voiceschanged 晚到时可从下往上恢复。 */
-  var engine = ttsSupported ? 'tts-lang' : 'sfx';
-  var ttsVoicesReady = false;    // 是否确认有可用中文音色
+  /* ---- 预录制音频包 ---- */
 
-  /* ---- 音色挑选：各家引擎的中文音色命名不统一，按名字猜男女 ---- */
-  var MALE_RE = /yunxi|yunjian|yunyang|yunye|kangkang|liang|male|男声|康康|云健|云希|云扬/i;
-  var FEMALE_RE = /xiaoxiao|xiaoyi|yunxia|xiaobei|xiaoni|huihui|yaoyao|tingting|meijia|zhiping|female|女声|晓晓|惠惠|婷婷|ting-ting|tingting|hui/i;
+  var audioBuffers = {};       // phraseKey → AudioBuffer
+  var packLoaded = false;      // 是否已开始 / 完成加载
+  var packReady = false;       // 至少加载了一个文件
 
-  var voices = { male: null, female: null, any: null, maleIsFemale: false };
+  function phraseKey(text) {
+    // 去掉标点，与生成脚本的短语列表对齐
+    return text.replace(/[！!？?，,。.～~、：:；;「」()\[\]（）\s]+/g, '');
+  }
 
-  function pickVoices() {
-    if (!ttsSupported) return;
-    var list;
-    try { list = synth.getVoices() || []; } catch (e) { return; }
-    // 只认中文音色：lang 以 zh 开头，或名字带 Chinese/中文/普通话。
-    // 绝不退而求其次用非中文音色念汉字（那就是「乱码」的第二条来源）。
-    var zh = list.filter(function (v) {
-      return /^zh/i.test(v.lang || '') || /Chinese|中文|普通话/i.test(v.name || '');
+  function safeFileName(text) {
+    return text.replace(/[\\/:*?"<>|\s]/g, '_');
+  }
+
+  /** 首次用户手势时批量预加载音频包 */
+  function loadVoicePack() {
+    if (packLoaded) return;
+    packLoaded = true;
+    var ac = getAudioContext();
+    if (!ac) return;
+
+    var manifests = [
+      '三', '四', '五', '六', '七', '八', '九', '十', '钩', '圈', 'K', '尖', '二',
+      '小王', '大王',
+      '对三', '对四', '对五', '对六', '对七', '对八', '对九', '对十',
+      '对钩', '对圈', '对K', '对尖', '对二',
+      '三个三', '三个四', '三个五', '三个六', '三个七', '三个八', '三个九',
+      '三个十', '三个钩', '三个圈', '三个K', '三个尖', '三个二',
+      '三带一', '三带二', '顺子', '连对', '飞机', '飞机带单', '飞机带对',
+      '四带二', '四带两对', '王炸', '炸弹',
+      '一万', '二万', '三万', '四万', '五万', '六万', '七万', '八万', '九万',
+      '一条', '二条', '三条', '四条', '五条', '六条', '七条', '八条', '九条',
+      '一筒', '二筒', '三筒', '四筒', '五筒', '六筒', '七筒', '八筒', '九筒',
+      '东风', '南风', '西风', '北风', '红中', '发财', '白板',
+      '吃', '碰', '杠', '暗杠', '加杠', '胡了', '我胡了',
+      '东位胡了', '南位胡了', '西位胡了', '北位胡了',
+      '不要', '过', '不叫', '一分', '两分', '三分',
+      '叫地主', '加倍', '不加倍', '超级加倍'
+    ];
+
+    manifests.forEach(function (text) {
+      var key = phraseKey(text);
+      if (audioBuffers[key]) return;
+      var url = 'js/voice/' + safeFileName(text) + '.mp3';
+      fetch(url)
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then(function (ab) { return ac.decodeAudioData(ab); })
+        .then(function (buf) { audioBuffers[key] = buf; })
+        .catch(function () { /* 缺文件静默忽略 */ });
     });
-    if (!zh.length) return;                      // 列表空 / 只有外文音色 → 保持现状
-    // 优先本地音色（离线可用、不依赖 Google 网络音色的静默失败）
-    zh.sort(function (a, b) { return (b.localService ? 1 : 0) - (a.localService ? 1 : 0); });
-    voices.male = null; voices.female = null; voices.any = zh[0] || null;
-    for (var i = 0; i < zh.length; i++) {
-      var nm = zh[i].name || '';
-      if (!voices.male && MALE_RE.test(nm)) voices.male = zh[i];
-      if (!voices.female && FEMALE_RE.test(nm)) voices.female = zh[i];
-    }
-    // 女声兜底：没匹配到就用第一个中文音色
-    if (!voices.female) voices.female = voices.any;
-    // 男声兜底：挑一个与女声不同名的中文音色；实在没有就共用（靠音高拉开反差）
-    if (!voices.male) {
-      for (var k = 0; k < zh.length; k++) {
-        if ((zh[k].name || '') !== (voices.female && voices.female.name)) { voices.male = zh[k]; break; }
-      }
-    }
-    voices.maleIsFemale = !voices.male ||
-      (voices.female && voices.male.name === voices.female.name);
-    if (!voices.male) voices.male = voices.female;
-    ttsVoicesReady = true;
-    // 晚到的音色列表：从 lang-only / 音效层恢复到最佳层
-    if (engine !== 'tts') engine = 'tts';
-  }
-  if (ttsSupported) {
-    pickVoices();
-    // 音色列表多数浏览器是异步就绪的，两种监听方式都挂上
-    if (typeof synth.addEventListener === 'function') {
-      synth.addEventListener('voiceschanged', pickVoices);
-    } else if ('onvoiceschanged' in synth) {
-      synth.onvoiceschanged = pickVoices;
-    }
   }
 
-  /* ---------------- 第一层：系统 TTS ---------------- */
+  function getAudioContext() {
+    return global.Sound && global.Sound.getRawContext ? global.Sound.getRawContext() : null;
+  }
 
-  var queueCount = 0;       // 待播计数（队列积压时丢弃旧播报，保持节奏）
-  var lastQueueAt = 0;      // 部分安卓 onend 永不回调 → 计数会泄漏，按时间兜底复位
+  /** 播放预录制音频，返回是否成功 */
+  function playPre(text, gender, excitement) {
+    var key = phraseKey(text);
+    var buf = audioBuffers[key];
+    if (!buf) return false;
+    var ac = getAudioContext();
+    if (!ac || ac.state !== 'running') return false;
 
-  function ttsSpeak(text, gender, excitement) {
     try {
-      var now = Date.now();
-      if (queueCount >= 2 || now - lastQueueAt > 8000) {
-        try { synth.cancel(); } catch (e) { /* 忽略 */ }
-        queueCount = 0;
-      }
-      var isMale = gender === 'male';
-      // 系统只有一个中文音色时男女共用，靠音高/语速拉开反差
-      var sameVoice = isMale && voices.maleIsFemale;
-      var v = isMale ? voices.male : (voices.female || voices.any);
-      var u = new global.SpeechSynthesisUtterance(text);
-      if (ttsVoicesReady && v) {
-        u.voice = v;
-        u.lang = v.lang || 'zh-CN';
-      } else {
-        // lang-only：安卓 Chrome 音色列表为空时，靠系统按语言路由中文引擎
-        u.lang = 'zh-CN';
-      }
-      // 轻快的打牌情绪：语速略快，音高按性别微调并带随机起伏，避免机械感
-      u.rate = (sameVoice ? 1.0 : 1.15) + Math.random() * 0.1 + (excitement ? 0.05 : 0);
-      u.pitch = (sameVoice ? 0.6 : (isMale ? 0.95 : 1.15)) +
-        (Math.random() * 0.1 - 0.05) + (excitement ? 0.1 : 0);
-      u.volume = 1;
-      u.onend = u.onerror = function () {
-        if (queueCount > 0) queueCount--;
-        // iOS：TTS 抢占音频会话导致 WebAudio（BGM/音效）中断，播完即尝试唤醒
-        if (global.Sound && global.Sound.resume) {
-          try { global.Sound.resume(); } catch (e) { /* 忽略 */ }
-        }
-      };
-      queueCount++;
-      lastQueueAt = now;
-      synth.speak(u);
-    } catch (e) { /* 播报失败不影响游戏 */ }
+      var src = ac.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = gender === 'male' ? 0.85 : (excitement ? 1.08 : 1.0);
+      var gain = ac.createGain();
+      gain.gain.value = excitement ? 0.9 : 0.72;
+      src.connect(gain);
+      gain.connect(ac.destination);
+      src.start(0);
+      return true;
+    } catch (e) { return false; }
   }
 
-  /**
-   * 首次用户手势时调用：预热系统 TTS ——
-   * 部分安卓浏览器必须先在人手势内 speak 过一次才出声。
-   * 同时做健康探测：预热utterance 若 2.5 秒内连 onstart 都没有
-   * （安卓/鸿蒙部分浏览器有 API 无引擎），降级为语义提示音。
-   */
-  var warmupStarted = false;
-  function warmup() {
-    if (!ttsSupported) return;
-    pickVoices();
-    try {
-      var u = new global.SpeechSynthesisUtterance(' ');
-      u.volume = 0;
-      u.lang = 'zh-CN';
-      u.onstart = function () { warmupStarted = true; };
-      synth.speak(u);
-    } catch (e) { /* 忽略 */ }
-    setTimeout(function () {
-      pickVoices();
-      if (!ttsVoicesReady && !warmupStarted && engine === 'tts-lang') {
-        engine = 'sfx';   // 真·无语音能力：以后播报走提示音
-      }
-    }, 2500);
-  }
+  /* ---- 语义音效层 ---- */
 
-  /* ---------------- 第二层：语义音效 ---------------- */
-
-  /** 事件 → 辨识音（audio.js 合成，零依赖） */
-  function cueFor(text, gender, cue) {
+  function cueFor(cue) {
     var S = global.Sound;
     if (!S) return;
     S.play(cue || 'vPlay');
   }
 
-  /* ---------------- 点数 → 口头叫法 ---------------- */
+  /* ---- 短语文本 ---- */
 
   var RANK_CN = ['', '', '', '三', '四', '五', '六', '七', '八', '九', '十',
     '钩', '圈', 'K', '尖', '二', '小王', '大王'];
 
-  /** 牌型 → 播报文本（纯函数，便于测试）。顺子/连对只念牌型名。 */
   function comboText(combo) {
     var Cards = global.Cards;
     if (!combo || !Cards) return '';
     var CT = Cards.CT;
+    // 炸弹/王炸/大小王的文本带感叹号（预录音层 phraseKey 去标点，音频无差异；
+    // 保留是为文本口径统一并供测试断言）
     switch (combo.type) {
       case CT.ROCKET: return '王炸！';
       case CT.BOMB: return '炸弹！';
@@ -197,18 +144,18 @@
     }
   }
 
-  /* ---------------- 统一播报入口 ---------------- */
+  /* ---- 统一播报入口 ---- */
 
   function speak(text, gender, excitement, cue) {
     if (!enabled || !text) return;
-    if (engine === 'tts' || engine === 'tts-lang') {
-      ttsSpeak(text, gender, excitement);
-      return;
-    }
-    cueFor(text, gender, cue);   // 第二层：语义音效
+
+    // Layer 0: 预录制音频
+    if (playPre(text, gender, excitement)) return;
+
+    // Layer 1: 语义音效兜底
+    cueFor(cue);
   }
 
-  /** 每个座位固定一种音色：斗地主（3 家）与麻将（4 家）通用，相邻座位不同声 */
   var SEAT_GENDER = ['female', 'male', 'female', 'male'];
   function seatGender(seat) { return SEAT_GENDER[seat] || 'female'; }
 
@@ -235,49 +182,38 @@
     speak(Math.random() < 0.5 ? '不要' : '过', seatGender(seat), false, 'pass');
   }
 
-  /** 叫分：0=不叫，1/2/3 = 一分/两分/三分 */
   function announceBid(seat, score) {
     var texts = ['不叫', '一分', '两分', '三分'];
     speak(texts[score] || '', seatGender(seat), score === 3, 'bid');
   }
 
-  /** 地主确定：由地主座位的声音念「叫地主」 */
   function announceLandlord(seat) {
-    speak('叫地主！', seatGender(seat), true, 'vLandlord');
+    speak('叫地主', seatGender(seat), true, 'vLandlord');
   }
 
-  /** 加倍：0=不加倍，1=加倍，2=超级加倍 */
   function announceDouble(seat, level) {
-    var t = level === 2 ? '超级加倍！' : (level === 1 ? '加倍！' : '不加倍');
+    var t = level === 2 ? '超级加倍' : (level === 1 ? '加倍' : '不加倍');
     speak(t, seatGender(seat), level > 0, 'double');
   }
 
   function setEnabled(v) {
     enabled = !!v;
-    if (!enabled) {
-      try { synth && synth.cancel(); } catch (e) { /* 忽略 */ }
-    }
   }
   function isEnabled() { return enabled; }
 
-  /** 调试 / 设置页展示当前引擎 */
   function engineInfo() {
     return {
-      engine: engine,
-      tts: ttsSupported, ttsVoices: ttsVoicesReady
+      engine: packReady ? 'pre' : 'sfx',
+      preloaded: Object.keys(audioBuffers).length
     };
   }
 
-  /** 当前语音引擎的人类可读描述（帮助面板用，诚实呈现能力） */
   function engineText() {
-    if (!ttsSupported) return '提示音（当前浏览器不支持语音合成）';
-    if (engine === 'tts') return '系统语音合成（中文音色）';
-    if (engine === 'tts-lang') return '系统语音合成（跟随系统设置）';
-    return '提示音（当前浏览器/设备无可用语音引擎）';
+    if (packReady && Object.keys(audioBuffers).length > 20) return '预录制语音包（107 条）';
+    return '提示音（语音包未加载完成）';
   }
 
   global.Voice = {
-    supported: ttsSupported,
     comboText: comboText,
     announcePlay: announcePlay,
     announcePass: announcePass,
@@ -286,7 +222,7 @@
     announceDouble: announceDouble,
     speak: function (text, gender, cue) { speak(text, gender || 'female', false, cue); },
     seatGender: seatGender,
-    warmup: warmup,
+    warmup: function () { loadVoicePack(); },
     engineInfo: engineInfo,
     engineText: engineText,
     setEnabled: setEnabled,

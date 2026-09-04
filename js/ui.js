@@ -614,24 +614,30 @@
     DOM.overlay.classList.add('show');
   }
 
-  /* ---------------- 复盘呼出胶囊 ----------------
-   * 结算面板被「复盘牌桌」隐藏后，牌桌中央的半透明按钮，点击重新弹出面板 */
-  function showRecall(container, text, onClick) {
+  /* ---------------- 复盘呼出胶囊组 ----------------
+   * 结算面板被「复盘牌桌」隐藏后，牌桌中央的半透明胶囊组：
+   * [再来一局] [查看结算] [换个场次]，全部半透明不遮挡复盘内容 */
+  function showRecallChips(container, items) {
     hideRecall();
-    var b = document.createElement('button');
-    b.className = 'recall-chip';
-    b.id = 'recallChip';
-    b.textContent = '📋 ' + (text || '查看结算');
-    b.addEventListener('click', function () {
-      hideRecall();
-      if (onClick) onClick();
+    var group = document.createElement('div');
+    group.id = 'recallChips';
+    group.className = 'recall-group';
+    (items || []).forEach(function (it) {
+      var b = document.createElement('button');
+      b.className = 'recall-chip' + (it.cls ? ' ' + it.cls : '');
+      b.textContent = it.text;
+      b.addEventListener('click', function () {
+        hideRecall();
+        if (it.onClick) it.onClick();
+      });
+      group.appendChild(b);
     });
-    (container || DOM.playArea).appendChild(b);
+    (container || DOM.playArea).appendChild(group);
   }
 
   function hideRecall() {
-    var b = el('recallChip');
-    if (b) b.remove();
+    var g = el('recallChips');
+    if (g) g.remove();
   }
 
   function closeDialog() {
@@ -677,7 +683,7 @@
     floatPanel: floatPanel, closeFloat: closeFloat,
     showDialog: showDialog, closeDialog: closeDialog,
     overlayShown: overlayShown,
-    showRecall: showRecall, hideRecall: hideRecall,
+    showRecallChips: showRecallChips, hideRecall: hideRecall,
     addDialogCloseHandler: addDialogCloseHandler,
     setDialogCloseHandler: setDialogCloseHandler,
     showLobby: showLobby, hideLobby: hideLobby,
