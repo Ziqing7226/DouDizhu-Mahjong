@@ -612,13 +612,13 @@
     var s = bidScore(hand);
 
     if (ctx.role === 'farmer') {
-      if (cfg.difficulty === 'easy') return s > 11 && Math.random() < 0.5 ? 1 : 0;
+      if (ctx.difficulty === 'easy') return s > 11 && Math.random() < 0.5 ? 1 : 0;
       if (s >= 14 && cfg.superDouble) return 2;
       if (s >= 9.5) return 1;
       return 0;
     }
     var fd = ctx.farmerDoubled || 0;
-    if (cfg.difficulty === 'easy') return 0;
+    if (ctx.difficulty === 'easy') return 0;
     if (s >= 12 || fd >= 2) return 1;
     return 0;
   }

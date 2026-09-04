@@ -46,6 +46,7 @@
       src.buffer = buf;   // 全零 = 静音
       src.connect(ctx.destination);
       src.start(0);
+      src.stop(ctx.currentTime + 0.06);   // 显式收尾，维持「每个音源都 stop」的配平约定
       unlocked = true;
     } catch (e) { /* 忽略 */ }
   }

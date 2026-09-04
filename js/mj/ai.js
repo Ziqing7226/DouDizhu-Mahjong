@@ -76,7 +76,7 @@
    * 任何一家河里出现过的牌对那张牌的听家是安全的（振听原理）。
    */
   function dangerOf(idx, ctx) {
-    var d = Tiles.isHonor(idx) ? 3 : ((idx % 9 === 0 || idx % 8 === 0) ? 4 : 6);
+    var d = Tiles.isHonor(idx) ? 3 : (Tiles.isTerminal(idx) ? 4 : 6);
     var seen = 4 - (ctx.unseen ? ctx.unseen[idx] : 0);
     d -= Math.min(2, seen);
     var rivers = ctx.opponentRivers || [];
@@ -254,10 +254,13 @@
       for (i = 0; i < pengs.length; i++) {
         if (ctx.counts[pengs[i]] >= 1) { res.jiagangIdx = pengs[i]; break; }
       }
-      // 大师：向听 ≤1 时不拆四张暗杠（可能破坏听牌）
+      // 大师：杠后向听 ≤1 时不拆四张暗杠（可能破坏听牌）。
+      // 暗杠后副露 +1，必须用杠后的预算（meldBudget - 1）评估——shanten
+      // 公式含 -2×(4−budget) 修正项，用杠前预算会把阈值从 ≤1 漂移成 ≤3，
+      // 系统性地放弃有利的暗杠
       if (res.gangIdx >= 0 && ctx.difficulty === 'master') {
         var c = ctx.counts.slice(); c[res.gangIdx] = 0;
-        if (cachedShanten(c, ctx.meldBudget) <= 1) res.gangIdx = -1;
+        if (cachedShanten(c, ctx.meldBudget - 1) <= 1) res.gangIdx = -1;
       }
     }
     return res;

@@ -298,7 +298,9 @@
       if (ex[rank]) return;
       if (size === 1) {
         if (arr.length >= 4) return;              // 不拆炸弹
-        if (rank >= 16) return;                   // 不轻易把王当带牌
+        // 单张翅膀允许用王：cand 按点数升序取用，别的牌够时轮不到王，
+        // 与 ai.js unseenHasBeat 的对手建模口径一致——否则「对手能用王
+        // 组三带一压我」而我方跟牌候选永远生成不出这一手
         cand.push({ rank: rank, cards: [arr[0]] });
       } else {
         if (arr.length < 2) return;

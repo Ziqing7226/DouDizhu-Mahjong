@@ -140,13 +140,17 @@
 
   function updateInfo() {
     var me = P(0);
+    // 三家手牌合计：叫分阶段为 51（底牌未揭开），地主拿底后随出牌递减。
+    // 旧公式 54 − 已出 − 底牌3 在拿底后恒少 3（底牌已进手牌却仍被扣减）
+    var handTotal = 0;
+    for (var h = 0; h < G.players.length; h++) handTotal += G.players[h].hand.length;
     UI.renderInfo([
       ['难度', AI.CFG[G.difficulty].name],
       ['我的身份', me.role === 'landlord' ? '地主' : (me.role === 'farmer' ? '农民' : '待定')],
       ['底分', G.baseScore],
       ['当前倍数', '×' + G.multiplier],
       ['已出炸弹', G.bombs + ' 个'],
-      ['牌桌剩余', (54 - G.played.length - G.bottom.length) + ' 张']
+      ['牌桌剩余', handTotal + ' 张']
     ]);
   }
 

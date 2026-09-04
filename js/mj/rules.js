@@ -216,6 +216,14 @@
       if (isHonor(i)) hasHonor = true;
       else suitsSeen[Tiles.suitOf(i)] = true;
     }
+    // 副露是完整手牌的一部分，花色判定必须一并纳入
+    //（否则暗牌全万的牌碰了红中仍会被误评成清一色×4，多付一倍）
+    (melds || []).forEach(function (m) {
+      (m.tiles || []).forEach(function (idx) {
+        if (isHonor(idx)) hasHonor = true;
+        else suitsSeen[Tiles.suitOf(idx)] = true;
+      });
+    });
     var nSuit = Object.keys(suitsSeen).length;
 
     if (nSuit === 1 && !hasHonor) { fan += 4; names.push('清一色 ×4'); }

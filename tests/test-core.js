@@ -155,6 +155,13 @@ eq(r5, [], '压不过就该没有候选');
 let r6 = beatsOf('w W 3', '2 2 2 2');
 ok(r6.some(x => x === 'wW'), '王炸应作为候选出现，实际 ' + JSON.stringify(r6));
 
+// 三带一的单张翅膀允许用王（与 AI 对手建模 unseenHasBeat 同口径；
+// 翅膀按点数升序取用，普通牌够时轮不到王）
+let r7 = beatsOf('9 9 9 w', '7 7 7 5');
+ok(r7.some(x => x === '999w'), '三带一应能生成带小王的候选，实际 ' + JSON.stringify(r7));
+let r8 = beatsOf('9 9 9 4 w', '7 7 7 5');
+ok(r8.some(x => x === '9994'), '有普通牌时应优先用普通牌作翅膀，实际 ' + JSON.stringify(r8));
+
 console.log('=== 手牌拆解 ===');
 
 const d1 = Dec.decompose(H('3 4 5 6 7 8 8'));

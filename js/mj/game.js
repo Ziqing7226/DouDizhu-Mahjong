@@ -42,6 +42,7 @@
     selected: null,        // 我的手牌选中的 tile 对象
     nextOpponents: null,   // 下一次开局使用的对手（回大厅刷新；再来一局保持）
     busy: false,
+    pendingTurn: false,    // 吃/碰/杠成立后到补发行牌回合落地前禁止交互（防窗口内提前打出）
     timer: null,
     timeLeft: 0,
     thinkingSeat: -1,
@@ -208,6 +209,7 @@
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
+    G.pendingTurn = false;
     G.lastDiscard = null;
     G.activeClaim = null;
     G.selected = null;
@@ -231,6 +233,7 @@
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
+    G.pendingTurn = false;
     G.activeClaim = null;
     MjUI.hideLobby();
     UI.closeFloat();
@@ -257,10 +260,10 @@
     var deck = Tiles.shuffle(Tiles.makeDeck());
     var opp = G.nextOpponents || rollOpponents();
     G.players = [
-      { seat: 0, name: '我', avatar: '🙂', isAI: false, hand: [], melds: [], river: [], delta: 0 },
-      { seat: 1, name: opp[0].name, avatar: opp[0].avatar, isAI: true, hand: [], melds: [], river: [], delta: 0 },
-      { seat: 2, name: opp[1].name, avatar: opp[1].avatar, isAI: true, hand: [], melds: [], river: [], delta: 0 },
-      { seat: 3, name: opp[2].name, avatar: opp[2].avatar, isAI: true, hand: [], melds: [], river: [], delta: 0 }
+      { seat: 0, name: '我', avatar: '🙂', isAI: false, hand: [], melds: [], river: [], delta: 0, draws: 0 },
+      { seat: 1, name: opp[0].name, avatar: opp[0].avatar, isAI: true, hand: [], melds: [], river: [], delta: 0, draws: 0 },
+      { seat: 2, name: opp[1].name, avatar: opp[1].avatar, isAI: true, hand: [], melds: [], river: [], delta: 0, draws: 0 },
+      { seat: 3, name: opp[2].name, avatar: opp[2].avatar, isAI: true, hand: [], melds: [], river: [], delta: 0, draws: 0 }
     ];
     for (var s = 0; s < 4; s++) G.players[s].hand = deck.splice(0, 13).map(function (t) {
       return { id: t.id, idx: t.idx, suit: t.suit, label: t.label, short: t.short };
@@ -272,6 +275,7 @@
     G.selected = null;
     G.logs = [];
     G.busy = false;
+    G.pendingTurn = false;
     G.drawCount = 0;
     G.phase = 'playing';
 
@@ -296,12 +300,14 @@
   function nextTurn(opts) {
     if (G.phase !== 'playing') return;
     opts = opts || {};
+    G.pendingTurn = false;   // 补发的行牌回合已落地，解除交互闸
     var p = P(G.turn);
 
     if (!opts.noDraw) {
       if (!G.wall.length) { settle(null, {}); return; }
       var tile = opts.fromTail ? G.wall.pop() : G.wall.shift();
       if (opts.fromTail) tile.lingshang = true;
+      else p.draws++;               // 天胡/地胡判定用：只数自然摸牌（岭上不算）
       p.hand.push(tile);
       G.drawCount++;
       if (G.turn === 0) Sound.play('select');
@@ -696,6 +702,7 @@
       return;
     }
     UI.closeFloat();
+    takeFromRiver(fromSeat, tile);   // 打出的这张已被拿走，离开牌河
     // 从手中移除用掉的暗牌（打出的那张不在任何人手里）
     var usedIds = new Set();
     var need = (claim.type === 'gang') ? 3 : (claim.type === 'peng' ? 2 : 0);
@@ -724,6 +731,7 @@
 
     G.busy = false;
     G.turn = claim.seat;
+    G.pendingTurn = true;   // 420ms 后补发 noDraw/fromTail 回合，落地前禁止交互
     G.lastDiscard = null;
     renderAll();
     if (claim.seat === 0) renderHand();
@@ -742,6 +750,16 @@
     return null;
   }
 
+  /** 把这张牌从某家牌河移除（被吃/碰/杠/点炮拿走时；不在河里则忽略，
+   *  例如抢杠胡的牌来自宣杠者手牌）。不移除会让余牌器把同一张牌
+   *  按「牌河 + 副露」双重扣减，显示与 AI 推算全部失真。 */
+  function takeFromRiver(seat, tile) {
+    var p = P(seat);
+    if (!p) return;
+    var i = p.river.indexOf(tile);
+    if (i >= 0) p.river.splice(i, 1);
+  }
+
   /** 暗杠：手里四张相同，杠后从墙尾补牌继续 */
   function doAngang(seat, idx) {
     var p = P(seat);
@@ -757,6 +775,7 @@
     log(p.name + ' 暗杠 ' + Tiles.labelOf(idx), seat === 0);
     renderAll();
     if (seat === 0) renderHand();
+    G.pendingTurn = true;   // 补发岭上回合落地前禁止交互（与 applyClaim 同闸）
     later(500, function () {
       G.turn = seat;
       nextTurn({ fromTail: true });
@@ -838,6 +857,7 @@
     log(p.name + ' 加杠 ' + Tiles.labelOf(idx), seat === 0);
     renderAll();
     if (seat === 0) renderHand();
+    G.pendingTurn = true;   // 补发岭上回合落地前禁止交互（与 applyClaim 同闸）
     later(500, function () {
       G.turn = seat;
       nextTurn({ fromTail: true });
@@ -874,6 +894,9 @@
     var w = P(winnerSeat);
     if (!opts.selfDraw) {
       w.hand.push(opts.tile);   // 点炮的牌并入手牌展示
+      // 同一张牌离开点炮者牌河，否则余牌器按「牌河+手牌」双重扣减
+      //（抢杠时这张牌来自宣杠者手牌，不在河里，按身份匹配自动跳过）
+      takeFromRiver(opts.loserSeat, opts.tile);
     }
     G.phase = 'over';
     clearTimer();
@@ -882,6 +905,13 @@
 
     var counts = Tiles.countsOf(w.hand);
     var winTile = opts.tile;
+    // 天胡/地胡：第一巡自然摸牌即胡。岭上补牌不算（有 lingshang 标记）；
+    // 抢杠/点炮的牌不来自本巡摸牌（selfDraw 为 false，天然不触发）；
+    // 有副露说明第一巡之前已有行牌，按惯例也不成立。
+    if (opts.selfDraw && winTile && !winTile.lingshang &&
+      P(winnerSeat).draws === 1 && w.melds.length === 0) {
+      winTile[winnerSeat === G.dealer ? 'tianhu' : 'dihu'] = true;
+    }
     // winTile 携带 lingshang / qianggang 等标志，直接交给番种评定
     var score = Rules.scoreHands(counts, w.melds, winTile || {}, opts.selfDraw);
     var unit = 100 * score.fan;

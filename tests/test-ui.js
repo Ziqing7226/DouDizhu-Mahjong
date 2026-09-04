@@ -670,6 +670,44 @@ console.log('\n=== 麻将冒烟 ===');
   ok(G2.phase === 'lobby', '切走后麻将应挂起，实际 ' + G2.phase);
 }
 
+/* ============================================================
+ * 6.6 麻将番种评定：花色类番种必须把副露算进完整手牌
+ * ============================================================ */
+console.log('\n=== 麻将番种 ===');
+{
+  const Rules = ctx.MjRules;
+  const mkCounts = list => {
+    const c = new Array(34).fill(0);
+    list.forEach(([i, n]) => { c[i] += n; });
+    return c;
+  };
+  // 暗牌全万（111 222 333 万 + 五万对）+ 副露碰红中：应评混一色，不得评清一色
+  const s1 = Rules.scoreHands(mkCounts([[0, 3], [1, 3], [2, 3], [4, 2]]),
+    [{ type: 'peng', tiles: [30, 30, 30], from: 1 }], { idx: 4 }, true);
+  ok(s1.names.some(n => n.startsWith('混一色')),
+    '暗牌全万+碰红中应评混一色，实际 ' + s1.names.join('/'));
+  ok(!s1.names.some(n => n.startsWith('清一色')),
+    '有字牌副露不得评清一色，实际 ' + s1.names.join('/'));
+
+  // 副露同为万（暗杠七万）：清一色照常成立，副露纳入不误伤
+  const s2 = Rules.scoreHands(mkCounts([[0, 3], [1, 3], [2, 3], [4, 2]]),
+    [{ type: 'angang', tiles: [6, 6, 6, 6], from: 2 }], { idx: 4 }, true);
+  ok(s2.names.some(n => n.startsWith('清一色')),
+    '副露同为万时仍应评清一色，实际 ' + s2.names.join('/'));
+
+  // 暗牌全字（北对 + 中/發/白三刻）+ 万杠：不得评字一色（应落混一色）
+  const s3 = Rules.scoreHands(mkCounts([[29, 2], [31, 3], [32, 3], [33, 3]]),
+    [{ type: 'angang', tiles: [0, 0, 0, 0], from: 3 }], { idx: 29 }, true);
+  ok(!s3.names.some(n => n.startsWith('字一色')),
+    '数牌副露在场时不得评字一色，实际 ' + s3.names.join('/'));
+
+  // 天胡/地胡标志联动：scoreHands 只认 winTile 上的标记（游戏层负责标注）
+  const s4 = Rules.scoreHands(mkCounts([[0, 3], [1, 3], [2, 3], [4, 2]]), [], { idx: 4, tianhu: true }, true);
+  ok(s4.names.some(n => n.startsWith('天胡')), 'winTile.tianhu 应评天胡，实际 ' + s4.names.join('/'));
+  const s5 = Rules.scoreHands(mkCounts([[0, 3], [1, 3], [2, 3], [4, 2]]), [], { idx: 4, dihu: true }, true);
+  ok(s5.names.some(n => n.startsWith('地胡')), 'winTile.dihu 应评地胡，实际 ' + s5.names.join('/'));
+}
+
 ok(!gameErr, '对局流程错误: ' + gameErr);
 console.log(`  连续完成 ${results.games} 局，平均每局 ${(results.steps.reduce((a, b) => a + b, 0) / Math.max(1, results.games)).toFixed(0)} 次调度`);
 
@@ -898,10 +936,12 @@ console.log(`  振荡器 ${stat.osc} / 增益 ${stat.gain} / 噪声源 ${stat.bu
 //   bid×4（0~3 分）共 7。总计 39。
 // 改动音效时请同步更新此处的期望值。
 ok(stat.osc === 39, `振荡器数量应为 39，实际 ${stat.osc}（音效合成不完整或已改动）`);
-// 增益节点 = 每个音源各一个 + init() 创建的主输出增益
-ok(stat.gain === stat.osc + stat.bufferSrc + 1,
-  `增益节点应为音源数+1（主输出），实际 增益${stat.gain} 音源${stat.osc + stat.bufferSrc}`);
-ok(stat.bufferSrc === 4, `噪声源应为 4（发牌/出牌/炸弹/王炸），实际 ${stat.bufferSrc}`);
+// 增益节点 = 每个常规音源各一个 + init() 创建的主输出增益
+//（iOS 解锁的静音源直连 destination、不挂增益，且自身有 start/stop，故单独计入）
+ok(stat.gain === stat.osc + stat.bufferSrc,
+  `增益节点应为常规音源数+主输出，实际 增益${stat.gain} 音源${stat.osc + stat.bufferSrc}`);
+ok(stat.bufferSrc === 5,
+  `噪声源应为 5（发牌/出牌/炸弹/王炸 + iOS 解锁静音源），实际 ${stat.bufferSrc}`);
 ok(stat.filter === 4, `滤波器应为 4，实际 ${stat.filter}`);
 ok(stat.start === stat.stop && stat.start === stat.osc + stat.bufferSrc,
   `start(${stat.start}) / stop(${stat.stop}) / 音源(${stat.osc + stat.bufferSrc}) 三者应相等`);
