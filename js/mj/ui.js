@@ -191,14 +191,13 @@
     box.className = 'mj-seat mj-seat-' + seat +
       (isActive ? ' active' : '') + (isThinking ? ' think' : '');
     box.innerHTML =
-      '<div class="avatar">' + p.avatar +
-      '<span class="cnt-badge">剩' + p.hand.length + '张</span>' +
-      '</div>' +
+      '<div class="avatar">' + p.avatar + '</div>' +
       '<div class="p-info">' +
       '<div class="p-name">' + p.name +
       (state && state.dealer === seat ? ' <span class="dealer-tag">庄</span>' : '') +
       '</div>' +
       '<div class="p-meta">' + wind + '位 · 剩 <b>' + p.hand.length + '</b> 张</div>' +
+      '<span class="cnt-badge">剩' + p.hand.length + '张</span>' +
       '</div>';
     syncTurnClock(seat);
   }
@@ -211,11 +210,12 @@
   }
 
   /* ---------------- 回合倒计时环 ----------------
-   * 行动方头像外圈的 30 秒红色进度环，与斗地主共用一套视觉（不带数字角标）。
-   * 游戏层 setTurnClock 锚定 / clearTurnClock 撤销；这里只负责画。 */
+   * 行动方「座位信息框」外圈的 30 秒红色圆角矩形进度环，与斗地主共用视觉。
+   * pathLength=100 归一化进度，任意框尺寸下精确；环随框伸缩（见 CSS）。 */
 
-  var CLOCK_C = (2 * Math.PI * 27).toFixed(3);   // viewBox r=27 的周长
-  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{avatar,svg,prg} }
+  var RING_PATH = 'M50 0 H88 A12 12 0 0 1 100 12 V88 A12 12 0 0 1 88 100 H12 ' +
+    'A12 12 0 0 1 0 88 V12 A12 12 0 0 1 12 0 H50 Z';   // 从顶部中点起顺时针
+  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{box,svg,prg} }
 
   function setTurnClock(seat, totalSec) {
     clearTurnClock();
@@ -228,15 +228,14 @@
       els: null
     };
     clock.iv = setInterval(clockTick, 1000);
-    var box = DOM.boxes[seat];
-    var avatar = box && box.querySelector('.avatar');
-    if (avatar) injectTurnClock(avatar);
+    injectTurnClock(DOM.boxes[seat]);
     clockTick();
   }
 
-  /** 游戏层每秒喂入我方真实剩余秒数（环的消耗速率与按钮倒计时同步） */
+  /** 游戏层每秒喂入我方真实剩余秒数（环的消耗速率与按钮倒计时同步）。
+   *  只同步「我方座位」的环：AI 回合的环走墙钟。 */
   function tickTurnClock(leftSec) {
-    if (!clock) return;
+    if (!clock || clock.seat !== 0) return;
     clock.explicit = leftSec;
     clockTick();
   }
@@ -248,31 +247,45 @@
     clock = null;
   }
 
-  function injectTurnClock(avatar) {
-    if (!clock) return;
-    if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的头像上
+  /** 当前进度对应的 dashoffset（注入前先算好，落位即正确值，不播放过渡动画） */
+  function ringOffsetNow() {
+    var left = clock.explicit != null
+      ? clock.explicit
+      : (clock.endsAt - Date.now()) / 1000;
+    if (left < 0) left = 0;
+    var frac = clock.total > 0 ? left / clock.total : 0;
+    return (100 * (1 - frac)).toFixed(1);
+  }
+
+  function injectTurnClock(box) {
+    if (!clock || !box) return;
+    if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的框上
     var svgNS = 'http://www.w3.org/2000/svg';
     var mkSVG = document.createElementNS
       ? function (t) { return document.createElementNS(svgNS, t); }
       : function (t) { return document.createElement(t); };   // 无 DOM 桩兜底
 
     var svg = mkSVG('svg');
-    svg.setAttribute('viewBox', '0 0 60 60');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('class', 'turn-ring');
-    var trk = mkSVG('circle');
-    trk.setAttribute('cx', '30'); trk.setAttribute('cy', '30'); trk.setAttribute('r', '27');
+    var trk = mkSVG('path');
+    trk.setAttribute('d', RING_PATH);
+    trk.setAttribute('pathLength', '100');
+    trk.setAttribute('vector-effect', 'non-scaling-stroke');
     trk.setAttribute('class', 'trk');
-    var prg = mkSVG('circle');
-    prg.setAttribute('cx', '30'); prg.setAttribute('cy', '30'); prg.setAttribute('r', '27');
+    var prg = mkSVG('path');
+    prg.setAttribute('d', RING_PATH);
+    prg.setAttribute('pathLength', '100');
+    prg.setAttribute('vector-effect', 'non-scaling-stroke');
     prg.setAttribute('class', 'prg');
-    prg.style.strokeDasharray = CLOCK_C;
-    prg.style.strokeDashoffset = '0';
+    prg.style.strokeDasharray = '100';
+    prg.style.strokeDashoffset = ringOffsetNow();   // 落位即当前进度
     svg.appendChild(trk);
     svg.appendChild(prg);
 
-    avatar.appendChild(svg);
-    clock.els = { avatar: avatar, svg: svg, prg: prg };
-    clockTick();
+    box.appendChild(svg);
+    clock.els = { box: box, svg: svg, prg: prg };
   }
 
   function clockTick() {
@@ -283,7 +296,7 @@
     if (left < 0) left = 0;
     var frac = clock.total > 0 ? left / clock.total : 0;
     if (clock.els && clock.els.prg) {
-      clock.els.prg.style.strokeDashoffset = (CLOCK_C * (1 - frac)).toFixed(1);
+      clock.els.prg.style.strokeDashoffset = (100 * (1 - frac)).toFixed(1);
     }
   }
 
@@ -291,10 +304,9 @@
   function syncTurnClock(seat) {
     if (!clock || clock.seat !== seat) return;
     var box = DOM.boxes[seat];
-    var avatar = box && box.querySelector('.avatar');
-    if (!avatar) return;
-    if (clock.els && clock.els.avatar === avatar && avatar.querySelector('.turn-ring')) return;
-    injectTurnClock(avatar);
+    if (!box) return;
+    if (clock.els && clock.els.box === box && box.querySelector('.turn-ring')) return;
+    injectTurnClock(box);
   }
 
   function meldsHtml(melds) {

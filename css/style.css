@@ -251,22 +251,9 @@ body {
   min-width: 190px;
   transition: box-shadow .2s, border-color .2s, transform .2s;
 }
-/* 剩余张数角标（手机折叠态可见）——「剩x张」文字胶囊，一眼可读 */
+/* 剩余张数：桌面在 p-meta 文字里；手机端隐藏 p-meta，用这枚小胶囊（名字下方） */
 .cnt-badge {
   display: none;
-  position: absolute;
-  right: -7px; bottom: -7px;
-  padding: 1px 7px;
-  border-radius: 10px;
-  background: #14301f;
-  border: 1.5px solid var(--gold);
-  color: var(--gold-lt);
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.5;
-  white-space: nowrap;
-  text-align: center;
-  z-index: 5;
 }
 .player-box.active {
   border-color: var(--gold);
@@ -291,39 +278,40 @@ body {
   position: relative;
 }
 .player-box, .mj-seat { position: relative; }
-.avatar .role-tag {
-  position: absolute;
-  bottom: -8px; left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 8px;
+/* 身份标签：名字上方的小胶囊（流内排布，头像保持干净） */
+.role-tag {
+  display: inline-block;
+  width: fit-content;
+  margin: 0 0 1px;
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 7px;
   white-space: nowrap;
-  font-weight: 700;
-  z-index: 5;
+  font-weight: 800;
+  line-height: 1.5;
 }
 .role-landlord { background: linear-gradient(180deg, #ff7a45, #d4380d); color: #fff; }
 .role-farmer { background: linear-gradient(180deg, #69c0ff, #096dd9); color: #fff; }
 
-/* ---------------- 回合倒计时环（行动方头像外圈，斗地主/麻将共用） ----------------
- * 紧贴头像外扩 5px 的 SVG 进度环（红色，与金色头像底高对比）。
+/* ---------------- 回合倒计时环（围绕座位信息框，斗地主/麻将共用） ----------------
+ * 红色圆角矩形进度环，贴着「头像+名字+剩牌数」整个卡片外扩 5px；
+ * SVG pathLength=100 归一化，preserveAspectRatio=none 随框伸缩，
+ * vector-effect 保持描边粗细恒定 —— 任意框尺寸/分辨率下进度比例精确。
  * 不带数字角标：精确秒数由「出牌 (N)」按钮呈现。
- * pointer-events:none、不参与布局，任何分辨率下都不会遮挡或挤压其他元素；
- * 环随 SVG viewBox 等比缩放，头像 40/46/52px 均自适应。 */
+ * pointer-events:none、不参与布局，不会遮挡或挤压其他元素。 */
 .turn-ring {
   position: absolute;
   inset: -5px;
   width: calc(100% + 10px);
   height: calc(100% + 10px);
-  transform: rotate(-90deg);
   pointer-events: none;
   z-index: 3;
   filter: drop-shadow(0 0 4px rgba(255, 82, 82, .65));
   overflow: visible;
 }
-.turn-ring circle {
+.turn-ring path {
   fill: none;
-  stroke-width: 4;
+  stroke-width: 3;
   stroke-linecap: round;
 }
 .turn-ring .trk { stroke: rgba(255, 244, 214, .25); }
@@ -335,8 +323,8 @@ body {
   .turn-ring .prg { transition: none; }
 }
 
-.p-info { line-height: 1.45; min-width: 0; }
-.p-name { font-size: 13px; font-weight: 700; color: #ffe9b8; }
+.p-info { line-height: 1.3; min-width: 0; }
+.p-name { font-size: 12px; font-weight: 700; color: #ffe9b8; }
 .p-meta { font-size: 11px; color: #cfe9d6; opacity: .85; }
 .p-count {
   font-size: 12px;
@@ -730,6 +718,62 @@ body {
   color: transparent;
 }
 .dialog .sec { margin-bottom: 12px; }
+/* 结算面板：加宽 + 双栏（明细 | 各家牌），高度减半免滚动 */
+.dialog.wide { width: min(720px, 94vw); }
+.settle-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  align-items: start;
+}
+.settle-grid .sec { margin: 0; }
+/* 亮牌区块：可折叠（手机默认收起保面板免拖动），跨两栏 */
+.settle-grid .reveal-box { grid-column: 1 / -1; }
+.reveal-box summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  font-size: 13px;
+  color: var(--gold-lt);
+  letter-spacing: 2px;
+  border-left: 3px solid var(--gold);
+  padding-left: 8px;
+  margin: 0 0 6px;
+  font-weight: 800;
+}
+.reveal-box summary::-webkit-details-marker { display: none; }
+.reveal-box summary::after { content: '▸'; margin-left: 6px; transition: transform .15s; display: inline-block; }
+.reveal-box[open] summary::after { transform: rotate(90deg); }
+.reveal-box summary:hover { color: #fff; }
+.reveal-box[open] summary { margin-bottom: 2px; }
+
+/* 复盘呼出胶囊：结算面板隐藏后，牌桌中央的半透明按钮 */
+.recall-chip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 24px;
+  border-radius: 26px;
+  border: 1.5px solid rgba(255, 233, 168, .75);
+  background: rgba(20, 8, 6, .55);
+  color: #ffe9b8;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .12);
+  transition: background .15s, transform .15s;
+}
+.recall-chip:hover {
+  background: rgba(74, 11, 8, .82);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+.recall-chip:active { transform: translate(-50%, -50%) scale(.97); }
 .dialog .sec h4 {
   margin: 0 0 6px;
   font-size: 13px;
@@ -778,15 +822,6 @@ body {
   text-shadow: 0 3px 10px rgba(0, 0, 0, .6);
 }
 @keyframes winPulse { from { transform: scale(1); } to { transform: scale(1.06); } }
-
-.delta-score {
-  text-align: center;
-  font-size: 30px;
-  font-weight: 900;
-  margin: 6px 0 14px;
-}
-.delta-score.plus { color: #ff6b5b; }
-.delta-score.minus { color: #7ddc8a; }
 
 /* ---------------- 提示条 / 吐司 ---------------- */
 
@@ -1538,11 +1573,11 @@ body {
 .is-mobile .my-row .hand-wrap { flex: 1 1 auto; min-width: 0; }
 .is-mobile .my-row .action-bar { flex: 1 1 100%; justify-content: center; padding: 4px 0 8px; }
 /* 座位信息常显（不再折叠）：头像 + 名字横排 + 张数角标；
- * 窄屏空间有限，名字超长用省略号截断保单行，省略次要文字 */
+ * 窄屏空间有限，名字超长时横向省略号截断保单行，省略次要文字 */
 .is-mobile .player-box {
   min-width: 0;
-  padding: 6px 9px;
-  gap: 7px;
+  padding: 5px 8px;
+  gap: 6px;
 }
 .is-mobile .player-box .p-info { display: block; min-width: 0; }
 .is-mobile .player-box .p-name {
@@ -1553,8 +1588,21 @@ body {
 }
 .is-mobile .player-box .p-meta,
 .is-mobile .player-box .mini-cards { display: none; }
-.is-mobile .cnt-badge { display: block; }
-.is-mobile .mj-seat { padding: 6px 8px; gap: 7px; }
+.is-mobile .cnt-badge {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #14301f;
+  border: 1px solid var(--gold);
+  color: var(--gold-lt);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.is-mobile .mj-seat { padding: 5px 7px; gap: 6px; }
 .is-mobile .mj-seat .p-info { display: block; min-width: 0; }
 .is-mobile .mj-seat .p-name {
   max-width: 76px;
@@ -1563,7 +1611,7 @@ body {
   text-overflow: ellipsis;
 }
 .is-mobile .mj-seat .p-meta { display: none; }
-.is-mobile .mj-seat .cnt-badge { display: block; }
+.is-mobile .mj-seat .cnt-badge { display: inline-block; }
 /* 副露已迁出到独立条（.mj-melds-strip），座位框只保留头像+名字 */
 .is-mobile .mtile.mini { width: 22px; height: 30px; font-size: 10px; }
 .is-mobile .avatar { width: 52px; height: 52px; font-size: 26px; }
@@ -1614,6 +1662,14 @@ body {
   max-height: 88vh;
   padding: 16px 18px;
 }
+.is-mobile .dialog.wide { width: min(720px, 94vw); }
+/* 手机横屏高度有限：结算面板整体紧凑一档，确保免拖动 */
+.is-mobile .dialog.wide { padding: 12px 14px; }
+.is-mobile .dialog.wide .kv { padding: 2px 0; font-size: 12px; }
+.is-mobile .dialog.wide .kv b.reveal-hand { max-width: 300px; font-size: 11px; }
+.is-mobile .dialog.wide .settle-grid { gap: 0 12px; }
+.is-mobile .dialog.wide .settle-title { font-size: 26px; }
+.is-mobile .dialog.wide .actions { margin-top: 8px; }
 .is-mobile .dialog .btn { min-width: 104px; padding: 11px 18px; font-size: 15px; }
 .is-mobile .dialog .kv b.reveal-hand { max-width: 300px; }
 .is-mobile .settle-title { font-size: 32px; }

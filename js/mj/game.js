@@ -203,6 +203,8 @@
     G.gen++;
     clearTimer();
     MjUI.clearTurnClock();
+    UI.hideRecall();
+    G.settleHtml = null;
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
@@ -224,6 +226,8 @@
     G.gen++;
     clearTimer();
     MjUI.clearTurnClock();
+    UI.hideRecall();
+    G.settleHtml = null;
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
@@ -242,6 +246,8 @@
     G.gen++;
     clearTimer();
     MjUI.clearTurnClock();
+    UI.hideRecall();
+    G.settleHtml = null;
     AI.resetCache();
     UI.closeFloat();
     UI.closeDialog();
@@ -905,7 +911,6 @@
     MjUI.bubble(winnerSeat, '胡 !', 'win');
     log('—— ' + w.name + ' 胡 ' + Tiles.labelOf(winTile.idx) + '（' + score.fan + ' 番）——', true);
 
-    var stats = Store.getStats('mj');
     var scoreRows = G.players.map(function (p) {
       return '<div class="kv"><span>' + p.name + (isDealer(p.seat) ? '（庄）' : '') +
         '</span><b class="' + (p.delta >= 0 ? 'plus' : 'minus') + '">' +
@@ -920,30 +925,38 @@
       '<div class="kv"><span>番种</span><b>' + score.names.join(' · ') + '</b></div>' +
       '<div class="kv"><span>番数</span><b>' + score.fan + ' 番（' + unit + ' 分）</b></div>';
 
-    // 局终亮牌：展示对手（含胡牌者）的手牌（对局过程中不显示）
+    // 局终亮牌：展示对手（含胡牌者）的手牌（对局过程中不显示）。
+    // 可折叠：桌面默认展开，手机横屏默认收起（保证结算面板免拖动）
+    var revealOpen = document.body.classList.contains('is-mobile') ? '' : ' open';
     var revealRows = revealHandsHtml(winnerSeat);
 
-    UI.showDialog(
+    /* 结算面板：加宽双栏（明细 | 各家得失），亮牌可折叠；删累计战绩（📊 可查看）；
+     * 「复盘牌桌」隐藏面板回看牌桌终态（UI.showRecall 呼出） */
+    G.settleHtml =
       '<div class="settle-title ' + (iWin ? 'win' : 'lose') + '">' +
-      (iWin ? '胡 了 !' : '他人胡牌') + '</div>' +
-      '<div class="delta-score ' + (myDelta >= 0 ? 'plus' : 'minus') + '">' +
-      (myDelta > 0 ? '+' : '') + myDelta + ' 分</div>' +
+      (iWin ? '我胡了！' : w.name + ' 胡') + '</div>' +
+      '<div class="settle-grid">' +
       '<div class="sec"><h4>本局明细</h4>' + detailRows + '</div>' +
-      (revealRows ? '<div class="sec"><h4>亮牌 · 各家手牌</h4>' + revealRows + '</div>' : '') +
       '<div class="sec"><h4>各家得失</h4>' + scoreRows + '</div>' +
-      '<div class="sec"><h4>累计战绩</h4>' +
-      '<div class="kv"><span>总场次</span><b>' + stats.games + ' 局</b></div>' +
-      '<div class="kv"><span>胜率</span><b>' + (Store.winRate('mj') * 100).toFixed(1) + '%</b></div>' +
-      '<div class="kv"><span>当前连胜</span><b>' + stats.streak + ' 连胜</b></div>' +
-      '<div class="kv"><span>累计积分</span><b>' + stats.score + '</b></div>' +
-      '</div>',
-      [
-        { text: '再来一局', cls: 'gold', onClick: newGame },
-        { text: '查看战绩', cls: 'ghost', keepOpen: true, onClick: showStats },
-        { text: '换个场次', cls: 'ghost', onClick: enterLobby }
-      ]
-    );
+      (revealRows ? '<details class="reveal-box"' + revealOpen + '><summary>亮牌 · 各家手牌</summary>' + revealRows + '</details>' : '') +
+      '</div>';
+    showSettle();
     renderAll();
+  }
+
+  /** 结算面板展示（首见与「复盘呼出」共用；内容取自 G.settleHtml 快照，不重复计分） */
+  function showSettle() {
+    if (!G.settleHtml) return;
+    UI.showDialog(G.settleHtml, [
+      { text: '再来一局', cls: 'gold', onClick: function () { UI.hideRecall(); newGame(); } },
+      {
+        text: '复盘牌桌', cls: 'ghost', silent: true,
+        onClick: function () {
+          UI.showRecall(MjUI.el('mjTable'), '查看结算', showSettle);
+        }
+      },
+      { text: '换个场次', cls: 'ghost', onClick: function () { UI.hideRecall(); enterLobby(); } }
+    ], 'wide');
   }
 
   /** 荒庄：牌墙摸完无人胡牌 */
@@ -955,25 +968,17 @@
     Sound.play('pass');
     log('—— 牌墙已尽，荒庄 ——', true);
 
-    var stats = Store.getStats('mj');
-    UI.showDialog(
+    var revealOpen2 = document.body.classList.contains('is-mobile') ? '' : ' open';
+    G.settleHtml =
       '<div class="settle-title lose">荒 庄</div>' +
-      '<div class="delta-score minus">±0 分</div>' +
+      '<div class="settle-grid">' +
       '<div class="sec"><h4>本局明细</h4>' +
       '<div class="kv"><span>结果</span><b>牌墙摸完，无人胡牌</b></div>' +
       '<div class="kv"><span>计分</span><b>荒庄不计分</b></div>' +
       '</div>' +
-      '<div class="sec"><h4>亮牌 · 各家手牌</h4>' + revealHandsHtml(-1) + '</div>' +
-      '<div class="sec"><h4>累计战绩</h4>' +
-      '<div class="kv"><span>总场次</span><b>' + stats.games + ' 局</b></div>' +
-      '<div class="kv"><span>胜率</span><b>' + (Store.winRate('mj') * 100).toFixed(1) + '%</b></div>' +
-      '</div>',
-      [
-        { text: '再来一局', cls: 'gold', onClick: newGame },
-        { text: '查看战绩', cls: 'ghost', keepOpen: true, onClick: showStats },
-        { text: '换个场次', cls: 'ghost', onClick: enterLobby }
-      ]
-    );
+      '<details class="reveal-box"' + revealOpen2 + '><summary>亮牌 · 各家手牌</summary>' + revealHandsHtml(-1) + '</details>' +
+      '</div>';
+    showSettle();
     renderAll();
   }
 
@@ -1039,10 +1044,14 @@
     G.timeLeft = TURN_SECONDS;
     G.timer = setInterval(function () {
       if (G.gen !== gen || G.phase !== 'playing') { clearTimer(); return; }
+      // 打出牌后计时器继续跑（驱动争抢浮层超时），但轮到 AI 行牌且
+      // 没有等我的争抢浮层时，它已无事可做 → 停掉（否则会在 AI 回合
+      // 白响「最后 5 秒」警告音）
+      if (G.turn !== 0 && !G.activeClaim) { clearTimer(); return; }
       if (UI.overlayShown()) return;   // 帮助/战绩等弹窗打开时暂停倒计时
       G.timeLeft--;
       if (G.timeLeft <= 0) { clearTimer(); autoAct(); return; }
-      if (G.timeLeft <= 5) Sound.play('warn');
+      if (G.timeLeft <= 5 && G.turn === 0) Sound.play('warn');
       MjUI.tickTurnClock(G.timeLeft);
     }, 1000);
   }

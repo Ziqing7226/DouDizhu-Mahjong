@@ -24,13 +24,18 @@
   var nav = global.navigator;
   if (!nav || !global.document || typeof global.innerWidth !== 'number') return;
 
-  /* ---------------- 移动端判定 ---------------- */
+  /* ---------------- 布局模式判定 ----------------
+   * 触摸移动设备，或「窗口窄于 1000px 设计稿」的桌面小窗口 ——
+   * 两者都套用等比缩放的手机布局（绝对定位的牌桌在窄窗口会严重堆叠，
+   * 缩放布局在任何宽度下都成立）。?mobile=1/0 可强制。
+   * 「请横屏」提示只对真触屏设备生效，桌面小窗口不弹。 */
 
   var ua = nav.userAgent || '';
   var touch = ('ontouchstart' in global) || (nav.maxTouchPoints || 0) > 1;
   var uaMobile = /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(ua);
   // iPadOS 13+ 的 Safari 默认报 Macintosh 桌面 UA，靠多点触控识别
   var iPadOS = /Macintosh/i.test(ua) && (nav.maxTouchPoints || 0) > 1;
+  var touchMobile = touch && (uaMobile || iPadOS);
 
   var forced = null;
   try {
@@ -39,7 +44,11 @@
     else if (q.get('mobile') === '0') forced = false;
   } catch (e) { /* 老浏览器无 URLSearchParams 就只靠 UA */ }
 
-  var isMobile = forced !== null ? forced : (touch && (uaMobile || iPadOS));
+  function layoutIsMobile() {
+    if (forced === true) return true;
+    if (forced === false) return false;
+    return touchMobile || global.innerWidth < DESIGN_W;
+  }
 
   /* ---------------- 等比缩放适配 ---------------- */
 
@@ -64,13 +73,16 @@
 
   function fit() {
     if (!app) return;
+    var isMobile = layoutIsMobile();   // 窗口宽度变化时动态切换布局模式
+    body.classList.toggle('is-mobile', isMobile);
     if (!isMobile) { body.classList.remove('portrait'); reset(); return; }
 
     var vw = global.innerWidth;
     var vh = global.innerHeight;
     var portrait = vh > vw;
-    body.classList.toggle('portrait', portrait);
-    if (portrait) { reset(); return; }   // 竖屏：交给「请横屏」提示层
+    // 竖屏提示只对触摸设备：桌面拉个竖长窗口不该被要求「请横屏」
+    body.classList.toggle('portrait', portrait && touchMobile);
+    if (portrait && touchMobile) { reset(); return; }
 
     if (vw >= DESIGN_W) { reset(); return; }   // 大屏横铺足够，无需缩放
 
@@ -92,7 +104,7 @@
     app = global.document.getElementById('app');
     if (!app) return;
     body = global.document.body;
-    if (isMobile) body.classList.add('is-mobile');
+    body.classList.toggle('is-mobile', layoutIsMobile());
     fit();
 
     var deb = null;
@@ -117,7 +129,7 @@
   }
 
   global.Mobile = {
-    isMobile: function () { return isMobile; },
+    isMobile: function () { return layoutIsMobile(); },
     fit: fit
   };
 

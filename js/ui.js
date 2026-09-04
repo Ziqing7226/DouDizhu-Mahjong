@@ -94,17 +94,18 @@
 
     box.className = 'player-box' +
       (isActive ? ' active' : '') + (isThinking ? ' think' : '');
+    /* 头像保持干净（无任何角标）；身份标签在名字上方，「剩x张」在名字下方，
+     * 倒计时环围绕整个座位框（见 .turn-ring） */
     box.innerHTML =
-      '<div class="avatar">' + p.avatar +
-      (roleText ? '<span class="role-tag ' + roleCls + '">' + roleText + '</span>' : '') +
-      '<span class="cnt-badge">剩' + p.hand.length + '张</span>' +
-      '</div>' +
+      '<div class="avatar">' + p.avatar + '</div>' +
       '<div class="p-info">' +
+      (roleText ? '<span class="role-tag ' + roleCls + '">' + roleText + '</span>' : '') +
       '<div class="p-name">' + p.name + '</div>' +
       '<div class="p-meta">剩 <span class="p-count"><b>' + p.hand.length + '</b></span> 张' +
       (p.bid > 0 ? ' · 叫' + p.bid + '分' : '') +
       (p.doubled === 1 ? ' · 加倍' : (p.doubled === 2 ? ' · 超级加倍' : '')) +
       '</div>' +
+      '<span class="cnt-badge">剩' + p.hand.length + '张</span>' +
       '</div>';
 
     if (seat !== 0) box.appendChild(miniBacks(p.hand.length));
@@ -112,14 +113,18 @@
   }
 
   /* ---------------- 回合倒计时环 ----------------
-   * 行动方头像外圈的 30 秒红色进度环（对标主流斗地主，不带数字角标——
-   * 精确秒数由「出牌 (N)」按钮呈现，头像上不堆数字）。
-   * 数据由游戏层驱动：setTurnClock 锚定起点，clearTurnClock 在行动后撤销；
-   * 这里只负责画——每秒根据截止时刻换算剩余，环用 CSS 过渡平滑消耗。
+   * 行动方「座位信息框」外圈的 30 秒红色圆角矩形进度环
+   * （围绕头像+名字+剩牌数的整个卡片，头像保持完整展示，不带数字角标——
+   * 精确秒数由「出牌 (N)」按钮呈现）。
+   * 实现要点：SVG path 画圆角矩形并设 pathLength=100，进度用
+   * stroke-dashoffset(0~100) 表达 —— 任意框尺寸下进度比例都精确；
+   * preserveAspectRatio="none" + vector-effect 让环贴合并随框伸缩。
+   * 数据由游戏层驱动：setTurnClock 锚定起点，clearTurnClock 在行动后撤销。
    * AI 的 30 秒是装饰性的（它 1~3 秒就会出牌，环提前消失）。 */
 
-  var CLOCK_C = (2 * Math.PI * 27).toFixed(3);   // viewBox r=27 的周长
-  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{avatar,svg,prg} }
+  var RING_PATH = 'M50 0 H88 A12 12 0 0 1 100 12 V88 A12 12 0 0 1 88 100 H12 ' +
+    'A12 12 0 0 1 0 88 V12 A12 12 0 0 1 12 0 H50 Z';   // 从顶部中点起顺时针
+  var clock = null;   // { seat, endsAt, total, explicit, iv, els:{box,svg,prg} }
 
   function setTurnClock(seat, totalSec) {
     clearTurnClock();
@@ -132,15 +137,15 @@
       els: null
     };
     clock.iv = setInterval(clockTick, 1000);
-    var box = DOM.boxes[seat];
-    var avatar = box && box.querySelector('.avatar');
-    if (avatar) injectTurnClock(avatar);
+    injectTurnClock(DOM.boxes[seat]);
     clockTick();
   }
 
-  /** 游戏层每秒喂入玩家真实剩余秒数（环的消耗速率与按钮倒计时完全同步） */
+  /** 游戏层每秒喂入玩家真实剩余秒数（环的消耗速率与按钮倒计时完全同步）。
+   *  只同步「我方座位」的环：AI 回合的环走墙钟，绝不能被玩家计时器驱动
+   *  （否则 AI 的环会以玩家剩余预算的速率狂跌——手机端曾观察到此现象）。 */
   function tickTurnClock(leftSec) {
-    if (!clock) return;
+    if (!clock || clock.seat !== 0) return;
     clock.explicit = leftSec;
     clockTick();
   }
@@ -152,31 +157,45 @@
     clock = null;
   }
 
-  function injectTurnClock(avatar) {
-    if (!clock) return;
-    if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的头像上
+  /** 当前进度对应的 dashoffset（注入前先算好，落位即正确值，不播放过渡动画） */
+  function ringOffsetNow() {
+    var left = clock.explicit != null
+      ? clock.explicit
+      : (clock.endsAt - Date.now()) / 1000;
+    if (left < 0) left = 0;
+    var frac = clock.total > 0 ? left / clock.total : 0;
+    return (100 * (1 - frac)).toFixed(1);
+  }
+
+  function injectTurnClock(box) {
+    if (!clock || !box) return;
+    if (clock.els && clock.els.svg) clock.els.svg.remove();   // 旧环可能挂在别的框上
     var svgNS = 'http://www.w3.org/2000/svg';
     var mkSVG = document.createElementNS
       ? function (t) { return document.createElementNS(svgNS, t); }
       : function (t) { return document.createElement(t); };   // 无 DOM 桩兜底
 
     var svg = mkSVG('svg');
-    svg.setAttribute('viewBox', '0 0 60 60');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('class', 'turn-ring');
-    var trk = mkSVG('circle');
-    trk.setAttribute('cx', '30'); trk.setAttribute('cy', '30'); trk.setAttribute('r', '27');
+    var trk = mkSVG('path');
+    trk.setAttribute('d', RING_PATH);
+    trk.setAttribute('pathLength', '100');
+    trk.setAttribute('vector-effect', 'non-scaling-stroke');
     trk.setAttribute('class', 'trk');
-    var prg = mkSVG('circle');
-    prg.setAttribute('cx', '30'); prg.setAttribute('cy', '30'); prg.setAttribute('r', '27');
+    var prg = mkSVG('path');
+    prg.setAttribute('d', RING_PATH);
+    prg.setAttribute('pathLength', '100');
+    prg.setAttribute('vector-effect', 'non-scaling-stroke');
     prg.setAttribute('class', 'prg');
-    prg.style.strokeDasharray = CLOCK_C;
-    prg.style.strokeDashoffset = '0';
+    prg.style.strokeDasharray = '100';
+    prg.style.strokeDashoffset = ringOffsetNow();   // 落位即当前进度，每回合刷新正确
     svg.appendChild(trk);
     svg.appendChild(prg);
 
-    avatar.appendChild(svg);
-    clock.els = { avatar: avatar, svg: svg, prg: prg };
-    clockTick();
+    box.appendChild(svg);
+    clock.els = { box: box, svg: svg, prg: prg };
   }
 
   function clockTick() {
@@ -187,18 +206,17 @@
     if (left < 0) left = 0;
     var frac = clock.total > 0 ? left / clock.total : 0;
     if (clock.els && clock.els.prg) {
-      clock.els.prg.style.strokeDashoffset = (CLOCK_C * (1 - frac)).toFixed(1);
+      clock.els.prg.style.strokeDashoffset = (100 * (1 - frac)).toFixed(1);
     }
   }
 
-  /** renderBox 每次整体重绘头像后调用：倒计时还挂着就得把环重新补上 */
+  /** renderBox 每次整体重绘座位后调用：倒计时还挂着就得把环重新补上 */
   function syncTurnClock(seat) {
     if (!clock || clock.seat !== seat) return;
     var box = DOM.boxes[seat];
-    var avatar = box && box.querySelector('.avatar');
-    if (!avatar) return;
-    if (clock.els && clock.els.avatar === avatar && avatar.querySelector('.turn-ring')) return;
-    injectTurnClock(avatar);
+    if (!box) return;
+    if (clock.els && clock.els.box === box && box.querySelector('.turn-ring')) return;
+    injectTurnClock(box);
   }
 
 
@@ -526,7 +544,8 @@
     dialogCloseHandlers.forEach(function (fn) { fn(); });
   }
 
-  function showDialog(html, buttons) {
+  function showDialog(html, buttons, cls) {
+    DOM.dialog.className = cls ? 'dialog ' + cls : 'dialog';
     DOM.dialog.innerHTML = html;
     var actions = document.createElement('div');
     actions.className = 'actions';
@@ -536,6 +555,13 @@
       btn.textContent = b.text;
       btn.addEventListener('click', function () {
         var wasShown = overlayShown();
+        // silent：只藏面板不广播关闭事件（结算面板「复盘牌桌」用，
+        // 保持 phase=over 的终态可回看，不触发「关弹窗回大厅」流程）
+        if (b.silent) {
+          hideOverlay();
+          if (b.onClick) b.onClick();
+          return;
+        }
         if (b.keepOpen !== true) hideOverlay();
         if (b.onClick) b.onClick();
         if (wasShown && b.keepOpen !== true) notifyDialogClosed();
@@ -544,6 +570,26 @@
     });
     DOM.dialog.appendChild(actions);
     DOM.overlay.classList.add('show');
+  }
+
+  /* ---------------- 复盘呼出胶囊 ----------------
+   * 结算面板被「复盘牌桌」隐藏后，牌桌中央的半透明按钮，点击重新弹出面板 */
+  function showRecall(container, text, onClick) {
+    hideRecall();
+    var b = document.createElement('button');
+    b.className = 'recall-chip';
+    b.id = 'recallChip';
+    b.textContent = '📋 ' + (text || '查看结算');
+    b.addEventListener('click', function () {
+      hideRecall();
+      if (onClick) onClick();
+    });
+    (container || DOM.playArea).appendChild(b);
+  }
+
+  function hideRecall() {
+    var b = el('recallChip');
+    if (b) b.remove();
   }
 
   function closeDialog() {
@@ -588,6 +634,7 @@
     floatPanel: floatPanel, closeFloat: closeFloat,
     showDialog: showDialog, closeDialog: closeDialog,
     overlayShown: overlayShown,
+    showRecall: showRecall, hideRecall: hideRecall,
     addDialogCloseHandler: addDialogCloseHandler,
     setDialogCloseHandler: setDialogCloseHandler,
     showLobby: showLobby, hideLobby: hideLobby,

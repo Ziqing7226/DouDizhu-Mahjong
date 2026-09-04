@@ -208,6 +208,8 @@
     G.gen++;              // 作废旧局所有未执行的回调
     clearTimer();
     UI.clearTurnClock();
+    UI.hideRecall();
+    G.settleHtml = null;
     Dec.resetCache();
     UI.closeFloat();
     UI.closeDialog();
@@ -786,7 +788,7 @@
     var unit = base * mult;
     var delta = iAmLandlord ? (iWin ? unit * 2 : -unit * 2) : (iWin ? unit : -unit);
 
-    var stats = Store.recordGame({
+    Store.recordGame({
       role: iAmLandlord ? 'landlord' : 'farmer',
       win: iWin, delta: delta, bombs: G.bombs, spring: spring || antiSpring
     });
@@ -798,6 +800,7 @@
     var detailRows = [
       ['获胜方', landlordWin ? '地主' : '农民'],
       ['我的身份', iAmLandlord ? '地主' : '农民'],
+      ['我的得分', (delta >= 0 ? '+' : '') + delta + ' 分'],
       ['底分', base],
       ['叫分倍数', '×' + G.bid.max],
       ['总倍数', '×' + mult],
@@ -814,28 +817,34 @@
         '</b></div>';
     }).join('');
 
-    UI.showDialog(
+    /* 结算面板：加宽双栏（明细 | 余牌），删去累计战绩（顶栏 📊 随可查看），
+     * 支持「复盘牌桌」隐藏面板回看牌桌终态（UI.showRecall 呼出） */
+    G.settleHtml =
       '<div class="settle-title ' + (iWin ? 'win' : 'lose') + '">' +
       (iWin ? '胜 利' : '失 败') + '</div>' +
-      '<div class="delta-score ' + (delta >= 0 ? 'plus' : 'minus') + '">' +
-      (delta >= 0 ? '+' : '') + delta + ' 分</div>' +
+      '<div class="settle-grid">' +
       '<div class="sec"><h4>本局明细</h4>' + detailRows + '</div>' +
       (remainRows ? '<div class="sec"><h4>各家余牌</h4>' + remainRows + '</div>' : '') +
-      '<div class="sec"><h4>累计战绩</h4>' +
-      '<div class="kv"><span>总场次</span><b>' + stats.games + ' 局</b></div>' +
-      '<div class="kv"><span>胜率</span><b>' + (Store.winRate() * 100).toFixed(1) + '%</b></div>' +
-      '<div class="kv"><span>当前连胜</span><b>' + stats.streak + ' 连胜</b></div>' +
-      '<div class="kv"><span>累计积分</span><b>' + stats.score + '</b></div>' +
-      '</div>',
-      [
-        { text: '再来一局', cls: 'gold', onClick: newGame },
-        { text: '查看战绩', cls: 'ghost', keepOpen: true, onClick: showStats },
-        { text: '换个场次', cls: 'ghost', onClick: enterLobby }
-      ]
-    );
+      '</div>';
+    showSettle();
 
     log('—— ' + P(winner).name + ' 获胜，' + (iWin ? '我 +' : '我 ') + delta + ' 分 ——', true);
     renderAll();
+  }
+
+  /** 结算面板展示（首见与「复盘呼出」共用；内容取自 G.settleHtml 快照，不重复计分） */
+  function showSettle() {
+    if (!G.settleHtml) return;
+    UI.showDialog(G.settleHtml, [
+      { text: '再来一局', cls: 'gold', onClick: function () { UI.hideRecall(); newGame(); } },
+      {
+        text: '复盘牌桌', cls: 'ghost', silent: true,
+        onClick: function () {
+          UI.showRecall(UI.DOM.playArea, '查看结算', showSettle);
+        }
+      },
+      { text: '换个场次', cls: 'ghost', onClick: function () { UI.hideRecall(); enterLobby(); } }
+    ], 'wide');
   }
 
   /* ================= 选场大厅 ================= */
@@ -845,6 +854,8 @@
     G.gen++;
     clearTimer();
     UI.clearTurnClock();
+    UI.hideRecall();
+    G.settleHtml = null;
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
@@ -1034,6 +1045,8 @@
     G.gen++;
     clearTimer();
     UI.clearTurnClock();
+    UI.hideRecall();
+    G.settleHtml = null;
     G.phase = 'lobby';
     G.thinkingSeat = -1;
     G.busy = false;
