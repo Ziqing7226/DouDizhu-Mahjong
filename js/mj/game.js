@@ -721,7 +721,7 @@
     p.hand = p.hand.filter(function (t) { return !usedIds.has(t.id); });
 
     var meldTiles = claim.type === 'chi' ? claim.run.slice() : [idx, idx, idx, idx].slice(0, claim.type === 'gang' ? 4 : 3);
-    p.melds.push({ type: claim.type, tiles: meldTiles, from: fromSeat });
+    p.melds.push({ type: claim.type, tiles: meldTiles, from: fromSeat, claimedIdx: idx });
 
     Sound.play('double');
     var txt = claim.type === 'gang' ? '杠' : (claim.type === 'peng' ? '碰' : '吃');

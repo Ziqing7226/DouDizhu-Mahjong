@@ -206,7 +206,7 @@
   function renderMelds(seat, melds) {
     var strip = DOM.melds && DOM.melds[seat];
     if (!strip) return;
-    strip.innerHTML = meldsHtml(melds);
+    strip.innerHTML = meldsHtml(melds, seat);
   }
 
   /* ---------------- 回合倒计时环 ----------------
@@ -309,13 +309,27 @@
     injectTurnClock(box);
   }
 
-  function meldsHtml(melds) {
+  /** 副露渲染。中国麻将惯例：碰/杠/吃进来的那张牌横放，标明从哪家拿的。
+   *  位置按来源排：上家的横牌放最左、对家放中间、下家放最右（暗杠无来源不标）。 */
+  function meldsHtml(melds, seat) {
     if (!melds || !melds.length) return '';
     var h = '<div class="mj-melds">';
     melds.forEach(function (m) {
       h += '<div class="mj-meld ' + m.type + '">';
-      m.tiles.forEach(function (idx) {
-        h += '<div class="mtile mini ' + SUIT_CLS[Tiles.suitOf(idx)] + '">' + faceHtml(idx) + '</div>';
+      var claimedPos = -1;
+      if (seat != null && m.from != null && m.from !== seat) {
+        if (m.type === 'chi') {
+          claimedPos = m.tiles.indexOf(m.claimedIdx);
+        } else {
+          var rel = (m.from - seat + 4) % 4;          // 1=下家 2=对家 3=上家
+          var n = m.tiles.length;
+          claimedPos = rel === 3 ? 0 : (rel === 1 ? n - 1 : Math.floor((n - 1) / 2));
+        }
+        if (claimedPos < 0 || claimedPos >= m.tiles.length) claimedPos = -1;
+      }
+      m.tiles.forEach(function (idx, i) {
+        h += '<div class="mtile mini' + (i === claimedPos ? ' claimed' : '') + ' ' +
+          SUIT_CLS[Tiles.suitOf(idx)] + '">' + faceHtml(idx) + '</div>';
       });
       h += '</div>';
     });

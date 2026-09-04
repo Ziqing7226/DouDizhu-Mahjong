@@ -1437,11 +1437,14 @@ body {
   z-index: 3;
 }
 .mj-melds-strip .mj-melds { display: contents; }   /* 排布直接交给条容器 */
-/* 副露朝向与各家牌河一致：左家 +90°、右家 -90°、对家 180°（逐张转，小牌近方形不串位） */
-.mj-melds-3 .mtile.mini { transform: rotate(90deg); }
-.mj-melds-1 .mtile.mini { transform: rotate(-90deg); }
-.mj-melds-2 .mtile.mini { transform: rotate(180deg); }
-/* 左右两家的每组副露转成纵向一列（对标主流：侧家副露竖排） */
+/* 牌面朝向与各家牌河一致：左家 +90°、右家 -90°、对家 180°；
+ * 碰/杠/吃进来的牌额外横放 90°（中国麻将惯例：横牌标来源），变量叠加互不覆盖 */
+.mj-melds-3 .mtile.mini { --rot: 90deg; }
+.mj-melds-1 .mtile.mini { --rot: -90deg; }
+.mj-melds-2 .mtile.mini { --rot: 180deg; }
+.mj-melds-strip .mtile.mini { transform: rotate(calc(var(--rot, 0deg) + var(--claimed, 0deg))); }
+.mj-melds-strip .mtile.mini.claimed { --claimed: 90deg; }
+/* 左右两家的每组副露转成纵向一列（对标国内主流：侧家副露竖排） */
 .mj-melds-1 .mj-meld, .mj-melds-3 .mj-meld { flex-direction: column; }
 .mj-melds-2 { top: 72px; left: calc(50% + 138px); }
 .mj-melds-1 { top: 50%; right: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
