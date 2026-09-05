@@ -184,14 +184,18 @@
       for (i = 0; i < kinds; i++) if (c[ranks[i]] !== 2) { allPair = false; break; }
       if (allPair) return { type: CT.DOUBLE_STRAIGHT, main: maxR, len: n / 2, cards: cards.slice() };
     }
-    /* --- 飞机系列（含纯飞机 / 带单 / 带对） --- */
-    if (n >= 6 && maxR <= MAX_STRAIGHT_RANK) {
+    /* --- 飞机系列（含纯飞机 / 带单 / 带对） ---
+     * 三顺本体不含 2 和王；翅膀可以含 2、单王（双王不可拆为翅膀，
+     * 见 wingsOk），因此本分支不能用整手 maxR 做门槛（会误杀带
+     * 王/2 翅膀的合法飞机），改为逐段检查三顺自身点数。 */
+    if (n >= 6) {
       var tripRanks = ranks.filter(function (x) { return c[x] >= 3; });
       if (tripRanks.length >= 2) {
         var runs = allRuns(tripRanks, 2);
         for (i = 0; i < runs.length; i++) {
           seg = runs[i];
           var m = seg.length;
+          if (seg[m - 1] > MAX_STRAIGHT_RANK) continue;   // 三顺不含 2（seg 内已连续，查最大即可）
           // 纯飞机
           if (n === 3 * m && tripRanks.length === m) {
             return { type: CT.TRIPLE_STRAIGHT, main: seg[m - 1], len: m, cards: cards.slice() };
@@ -210,7 +214,11 @@
     /* --- 四带二 / 四带两对 --- */
     var quads = ranks.filter(function (x) { return c[x] === 4; });
     if (quads.length === 1) {
-      if (n === 6) return { type: CT.FOUR_TWO, main: quads[0], len: 1, cards: cards.slice() };
+      if (n === 6) {
+        // 欢乐斗地主：四带二单的两张单牌不能是大小王（王炸不可拆带）
+        if (c[16] === 1 && c[17] === 1) return null;
+        return { type: CT.FOUR_TWO, main: quads[0], len: 1, cards: cards.slice() };
+      }
       if (n === 8) {
         var restRanks = ranks.filter(function (x) { return x !== quads[0]; });
         var pairs = restRanks.filter(function (x) { return c[x] === 2; });
@@ -228,13 +236,14 @@
    * seg   : 飞机主体的连续点数
    * m     : 主体三张组数
    * size  : 1=带单张，2=带对子
-   * 约束：主体用掉每个点数 3 张后，剩余牌刚好构成翅膀，且不允许拆炸弹当翅膀。
+   * 约束：主体用掉每个点数 3 张后，剩余牌刚好构成翅膀，且不允许拆炸弹当翅膀；
+   * 按欢乐斗地主规则，翅膀不能同时含大小王（王炸不可拆为翅膀）。
    */
   function wingsOk(c, seg, m, size) {
     var used = new Array(18).fill(0);
     for (var i = 0; i < m; i++) used[seg[i]] = 3;
     var need = m * size;
-    var total = 0, units = 0;
+    var total = 0, units = 0, jokerWings = 0;
     for (var r = 3; r <= 17; r++) {
       var left = c[r] - (used[r] || 0);
       if (left < 0) return false;
@@ -247,7 +256,9 @@
         if (left < 2) return false;          // 对子翅膀：必须成对
         units += Math.floor(left / 2);
       }
+      if (size === 1 && r >= 16) jokerWings += left;
     }
+    if (jokerWings >= 2) return false;      // 王炸不可拆为飞机翅膀
     return total === need && units >= m;
   }
 
