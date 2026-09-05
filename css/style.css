@@ -1418,6 +1418,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  align-content: flex-start;   /* 牌少时排与排收拢贴边，不摊行距（少牌/满牌行距恒定） */
   width: 260px;          /* 横排：每行 6 张（40+4） */
   height: 170px;         /* 3 行封顶 */
   z-index: 2;
@@ -1605,7 +1606,7 @@ body {
 }
 .is-mobile .player-box .p-info { display: block; min-width: 0; }
 .is-mobile .player-box .p-name {
-  max-width: 88px;
+  max-width: 160px;   /* 长名字完整显示，与麻将座位胶囊同口径 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1643,7 +1644,7 @@ body {
 .is-mobile .bottom-cards .card { transform: scale(.8); transform-origin: top center; }
 
 /* ---- 麻将：牌与按钮放大（设计稿层面） ---- */
-.is-mobile .mj-hand { min-height: 104px; margin-right: 96px; }
+.is-mobile .mj-hand { min-height: 104px; margin-left: 244px; margin-right: 170px; }
 .is-mobile .mj-hand .mtile {
   width: 58px;
   height: 80px;
@@ -1668,11 +1669,13 @@ body {
 /* 侧家副露：限高 200（任何副露组合下容器高 ≤156，底部不进我方副露带）、
  * 限宽 132（极端 4 列也包住，右家条右锚定自动向左生长，不横溢撞河）；
  * 间隙以「满河时最近牌面」为基准收到安全极限（横牌溢出 5px 已计入） */
-.is-mobile .mj-melds-1 { top: 43%; right: 158px; transform: translateY(-50%); max-height: 200px; max-width: 132px; }
-.is-mobile .mj-melds-3 { top: 43%; left: 158px; transform: translateY(-50%); max-height: 200px; max-width: 132px; }
-/* 我的副露与我的胶囊同排，与牌河留 3px（两碰可单行）；胶囊底边与副露/河对齐 */
-.is-mobile .mj-melds-0 { bottom: 104px; left: 315px; right: auto; max-width: 176px; }
-.is-mobile .mj-seat-0 { bottom: 104px; }
+.is-mobile .mj-melds-1 { top: 43%; right: 158px; transform: translateY(-50%); max-height: 96px; max-width: 132px; }
+.is-mobile .mj-melds-3 { top: 43%; left: 158px; transform: translateY(-50%); max-height: 96px; max-width: 132px; }
+/* 我的副露随居中牌河锚定（牌河半宽 103.5 + 3px 间隙），任何设计宽度下
+ * 恒定间距；max-width 176 恰好一排两幅，三幅起自动折两排 */
+.is-mobile .mj-melds-0 { bottom: 104px; right: calc(50% + 107px); left: auto; max-width: 176px; }
+/* 我方胶囊下移到底边（稍高 12px），手牌右移让位 */
+.is-mobile .mj-seat-0 { bottom: 12px; }
 /* 侧家座位胶囊放开长度：长名字完整显示（横向空间充足） */
 .is-mobile .mj-seat-1, .is-mobile .mj-seat-3 { max-width: 240px; }
 .is-mobile .mj-seat-2 { max-width: 380px; }
@@ -1723,25 +1726,69 @@ body {
 /* 复盘态：我方胶囊（含庄标）全局让位；桌面亮牌列纵贯我方区域，
  * 我方副露条（左缘 x 14 起）会与左列相碰，一并隐藏。
  * 手机端亮牌列贴左右边缘、不经过我方副露带，副露保留不动。
- * （reveal-mode 类挂在 body 上，须用复合选择器而非后代） */
+ * （reveal-mode 类挂在 body 上，须用复合选择器而非后代）
+ * 复盘时操作按钮是死按钮，一并隐藏给亮牌列让出全高。 */
 .reveal-mode .mj-seat-0 { display: none; }
+.reveal-mode .mj-actions { visibility: hidden; }
 body:not(.is-mobile).reveal-mode .mj-melds-0 { display: none; }
 
-.is-mobile .remain-tiles .mtile { width: 24px; height: 30px; font-size: 11px; }
+/* 触及档（设计宽 ≤1133）：14 张手牌可用宽恰足，去我方头像压缩左占位 */
+@media (max-aspect-ratio: 2.024/1) {
+  .is-mobile .mj-seat-0 .avatar { display: none; }
+  .is-mobile .mj-hand { margin-left: 205px; margin-right: 158px; }
+}
+/* 窄宽高比机型（设计宽 <1092）：手牌牌面加密一档，避免右溢碰到按钮带 */
+@media (max-aspect-ratio: 2/1) {
+  .is-mobile .mj-hand .mtile { margin-left: -13px; }
+  .is-mobile .mj-hand { margin-right: 156px; }
+}
+
+/* ---- 宽屏手机（AR ≥ 2）：牌河扩容 18→30 张 + 副露重排 ----
+ * 设计宽 = 560×宽高比 ≥1120；窄窗口（AR<2）自动回退上方现状布局。
+ * 横河向各自"右侧"生长 3 列（我河屏幕右偏 2 列、对面河屏幕左偏 2 列，
+ * 镜像对称 ±70px），左各扩 1 列；侧河上下共扩 4 排（行距收 1px）
+ * 并锚定 y 70~408（上让胶囊 4px、下让按钮带 4px）。
+ * 副露：两侧原地改 2×2（组内横排、牌面直立、牌面 22×30 使左带在
+ * AR 2.0 恰好容纳）；对面竖条加宽容杠（4 张一行 110px）贴顶河右缘；
+ * 我方竖排 4 行贴我河左缘。 */
+@media (min-aspect-ratio: 2/1) {
+  .is-mobile .mj-river { width: 347px; }
+  .is-mobile .mj-river-2 { margin-left: -70px; }
+  .is-mobile .mj-river-0 { margin-left: 70px; }
+  .is-mobile .mj-river-1, .is-mobile .mj-river-3 { height: 318px; gap: 2px; top: 72px; transform: none; }
+  .is-mobile .rv-cell { height: 30px; }
+  .is-mobile .mj-river-1 .mtile, .is-mobile .mj-river-3 .mtile { width: 30px; height: 36px; }
+  .is-mobile .mj-melds-2 { left: calc(50% + 142px); max-width: 112px; }
+  /* 两侧副露：旋转与生长规则同现状（横置牌竖列），仅限高改为每列两幅
+   * （4 组 = 两列两行，即 2×2） */
+  .is-mobile .mj-melds-1, .is-mobile .mj-melds-3 { max-height: 176px; }
+  .is-mobile .mj-melds-0 {
+    flex-flow: column;
+    max-width: 112px;
+    max-height: none;
+    bottom: auto;
+    right: calc(50% + 141px);
+    left: auto;
+    top: calc(50% + 70px);
+    transform: translateY(-50%);
+  }
+}
+
+.is-mobile .remain-tiles .mtile { width: 26px; height: 36px; font-size: 12px; }
+/* 手机复盘态：两侧副露块隐藏（亮牌已上桌，避免与让位牌河/竖条挤位） */
+.is-mobile.reveal-mode .mj-melds-1, .is-mobile.reveal-mode .mj-melds-3 { display: none; }
 .is-mobile .remain-mj-2 { top: 46px; }
 .is-mobile .remain-mj-1, .is-mobile .remain-mj-3 { top: 76px; }
-/* 复盘让位量：河向桌心挪后，侧家副露条同步跟进收紧（牌面级间隙 6~14px） */
+/* 复盘让位量：河向桌心挪后（两侧副露块复盘已隐藏，无需让位规则） */
 .is-mobile .mj-river-2.reveal-shift { top: 100px; }
 .is-mobile .mj-melds-2.reveal-shift { top: 96px; }
-.is-mobile .mj-melds-3.reveal-shift { left: 210px; }
-.is-mobile .mj-melds-1.reveal-shift { right: 216px; }
 /* 复盘精简对方胶囊：只留名字（+庄标），压低顶带高度 */
 .is-mobile.reveal-mode .mj-seat-1, .is-mobile.reveal-mode .mj-seat-2, .is-mobile.reveal-mode .mj-seat-3 { padding: 3px 8px; }
 .is-mobile.reveal-mode .mj-seat-1 .avatar, .is-mobile.reveal-mode .mj-seat-2 .avatar, .is-mobile.reveal-mode .mj-seat-3 .avatar,
 .is-mobile.reveal-mode .mj-seat-1 .cnt-badge, .is-mobile.reveal-mode .mj-seat-2 .cnt-badge, .is-mobile.reveal-mode .mj-seat-3 .cnt-badge { display: none; }
 
-/* 操作按钮 2×2 已上收为共享规则；手机端手牌为宽按钮块让位 */
-.is-mobile .mj-hand { margin-right: 150px; }
+/* 操作按钮 2×2 已上收为共享规则；手牌右移让位（胶囊在左下、按钮在右下）
+ * —— 该基础边距已前移至 .is-mobile .mj-hand 主规则处，避免覆盖下方档位媒体查询 */
 /* 手机端副露小牌放大 */
 .is-mobile .mtile.mini { width: 26px; height: 36px; font-size: 12px; }
 

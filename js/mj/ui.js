@@ -404,11 +404,17 @@
   function renderRiver(seat, tiles, lastId) {
     var w = DOM.rivers[seat];
     if (!w) return;
+    // 容量按布局取：宽屏手机（AR≥2）牌河扩容 30 张，其余 18 张。
+    // 窗口跨阈值时下一回合 renderAll 自动更新（限制如实标注）。
+    var cap = 18;
+    try {
+      if (global.matchMedia && global.matchMedia('(min-aspect-ratio: 2/1)').matches) cap = 30;
+    } catch (e) { /* 无 matchMedia 环境（测试桩）保持 18 */ }
     w.innerHTML = '';
-    // 定格最近 18 张（6×3）：面积恒定，杜绝堆叠与外溢（更早的弃牌不再展示）
+    // 定格最近 cap 张：面积恒定，杜绝堆叠与外溢（更早的弃牌不再展示）
     // 牌面朝向由 CSS 按河位统一旋转（全部头朝桌心，各家读起来是正的）。
     var vertical = (seat === 1 || seat === 3);
-    tiles.slice(-18).forEach(function (t) {
+    tiles.slice(-cap).forEach(function (t) {
       var d = tileEl(t, t.id === lastId ? 'last' : '');
       if (!vertical) { w.appendChild(d); return; }
       var cell = document.createElement('div');
@@ -554,7 +560,9 @@
 
   /** 大师档隐藏提示按钮 */
   function setHintVisible(visible) {
-    DOM.mjBtnHint.style.display = visible ? '' : 'none';
+    // visibility 而非 display：大师场隐藏提示时保留网格占位，
+    // 胡键仍固定右下角（[空][杠] / [打出][胡]）
+    DOM.mjBtnHint.style.visibility = visible ? '' : 'hidden';
   }
 
   /* ---------------- 选场大厅 ---------------- */
