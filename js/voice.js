@@ -31,14 +31,9 @@
 
   /* ---- 预录制音频包 ---- */
 
-  var audioBuffers = {};       // phraseKey → AudioBuffer
+  var audioBuffers = {};       // 播报短语 → AudioBuffer（短语即键即文件名）
   var packLoaded = false;      // 是否已开始 / 完成加载
   var packReady = false;       // 至少加载了一个文件
-
-  function phraseKey(text) {
-    // 去掉标点，与生成脚本的短语列表对齐
-    return text.replace(/[！!？?，,。.～~、：:；;「」()\[\]（）\s]+/g, '');
-  }
 
   function safeFileName(text) {
     return text.replace(/[\\/:*?"<>|\s]/g, '_');
@@ -76,13 +71,12 @@
     ];
 
     manifests.forEach(function (text) {
-      var key = phraseKey(text);
-      if (audioBuffers[key]) return;
+      if (audioBuffers[text]) return;
       var url = 'js/voice/' + safeFileName(text) + '.mp3';
       fetch(url)
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
       .then(function (ab) { return ac.decodeAudioData(ab); })
-      .then(function (buf) { audioBuffers[key] = buf; packReady = true; })
+      .then(function (buf) { audioBuffers[text] = buf; packReady = true; })
       .catch(function () { /* 缺文件静默忽略（播放时走元素兜底） */ });
     });
   }
@@ -94,8 +88,7 @@
   /** 播放预录制音频，返回是否成功。
    *  两级通道：WebAudio buffer（http 预加载的主路径）→ HTMLAudio 兜底。 */
   function playPre(text, gender, excitement, cue) {
-    var key = phraseKey(text);
-    var buf = audioBuffers[key];
+    var buf = audioBuffers[text];
     if (buf) {
       var ac = getAudioContext();
       if (ac && ac.state === 'running') {
@@ -155,13 +148,11 @@
     var Cards = global.Cards;
     if (!combo || !Cards) return '';
     var CT = Cards.CT;
-    // 炸弹/王炸/大小王的文本带感叹号（预录音层 phraseKey 去标点，音频无差异；
-    // 保留是为文本口径统一并供测试断言）
+    // 播报文本即音频包查找键与文件名：直接输出无标点短语
     switch (combo.type) {
-      case CT.ROCKET: return '王炸！';
-      case CT.BOMB: return '炸弹！';
-      case CT.SINGLE:
-        return (combo.main >= 16) ? RANK_CN[combo.main] + '！' : RANK_CN[combo.main];
+      case CT.ROCKET: return '王炸';
+      case CT.BOMB: return '炸弹';
+      case CT.SINGLE: return RANK_CN[combo.main];
       case CT.PAIR: return '对' + RANK_CN[combo.main];
       case CT.TRIPLE: return '三个' + RANK_CN[combo.main];
       case CT.TRIPLE_ONE: return '三带一';
@@ -249,7 +240,6 @@
 
   global.Voice = {
     comboText: comboText,
-    phraseKey: phraseKey,
     announcePlay: announcePlay,
     announcePass: announcePass,
     announceBid: announceBid,

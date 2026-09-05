@@ -1097,10 +1097,10 @@ const CTC = ctx.Cards.CT;
 ok(ctx.Voice.comboText(mkC(CTC.PAIR, 15)) === '对二', '「对二」播报文本错误: ' + ctx.Voice.comboText(mkC(CTC.PAIR, 15)));
 ok(ctx.Voice.comboText(mkC(CTC.TRIPLE_ONE, 10)) === '三带一', '「三带一」播报文本错误');
 ok(ctx.Voice.comboText(mkC(CTC.TRIPLE_PAIR, 9)) === '三带二', '「三带二」播报文本错误');
-ok(ctx.Voice.comboText(mkC(CTC.BOMB, 8)) === '炸弹！', '「炸弹」播报文本错误');
-ok(ctx.Voice.comboText(mkC(CTC.ROCKET, 17)) === '王炸！', '「王炸」播报文本错误');
+ok(ctx.Voice.comboText(mkC(CTC.BOMB, 8)) === '炸弹', '「炸弹」播报文本错误');
+ok(ctx.Voice.comboText(mkC(CTC.ROCKET, 17)) === '王炸', '「王炸」播报文本错误');
 ok(ctx.Voice.comboText(mkC(CTC.SINGLE, 14)) === '尖', '单张A应为「尖」');
-ok(ctx.Voice.comboText(mkC(CTC.SINGLE, 17)) === '大王！', '单张大王应带情绪');
+ok(ctx.Voice.comboText(mkC(CTC.SINGLE, 17)) === '大王', '单张大王播报文本错误');
 ok(ctx.Voice.comboText(mkC(CTC.PAIR, 3)) === '对三', '「对三」播报文本错误');
 ok(ctx.Voice.comboText(mkC(CTC.STRAIGHT, 9, 5)) === '顺子',
   '顺子播报文本错误: ' + ctx.Voice.comboText(mkC(CTC.STRAIGHT, 9, 5)));
@@ -1134,10 +1134,6 @@ ok(!voiceErr, '无 speechSynthesis 时未静默降级: ' + (voiceErr && voiceErr
 let warmErr = null;
 try { ctx.Voice.warmup(); } catch (e) { warmErr = e; }
 ok(!warmErr, '无 fetch 环境 warmup 抛异常: ' + (warmErr && warmErr.message));
-
-// 播报文本 → 音频包 key 的去标点口径（与 tools/gen-voice-pack.js 短语表对齐）
-ok(ctx.Voice.phraseKey('王炸！') === '王炸', 'phraseKey 应去掉情绪叹号');
-ok(ctx.Voice.phraseKey('东位胡了') === '东位胡了', 'phraseKey 不应误伤普通文本');
 
 console.log('\n=== 拖动连选 ===');
 

@@ -1447,6 +1447,23 @@ body {
 .mj-river-1 { top: 50%; right: 12px; transform: translateY(-50%); }
 .mj-river-3 { top: 50%; left: 12px; transform: translateY(-50%); }
 
+/* ---- 桌面牌河扩容（视口 ≥700 高）：18→30 张 + 副露加大 ----
+ * 横河 10 列（436px，我河右偏 2 列/对面河左偏 2 列，镜像 ±88px，
+ * 各向自己右侧生长）；侧河 10 排（392px）上锚定 y 72（底让胶囊带，
+ * 视口 ≥694 全绿）。副露 mini 26×36：侧家每列两幅自然成 2×2，
+ * 我方横排两幅一行。矮视口（<700）自动回退上方 18 张现状。
+ * 注意：本块必须位于上方河位规则之后，否则 top/transform 被覆盖。 */
+@media (min-height: 700px) {
+  body:not(.is-mobile) .mj-river { width: 436px; }
+  body:not(.is-mobile) .mj-river-1, body:not(.is-mobile) .mj-river-3 { width: 170px; }
+  body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
+  body:not(.is-mobile) .mj-river-0 { margin-left: 88px; }
+  body:not(.is-mobile) .mj-river-1, body:not(.is-mobile) .mj-river-3 { height: 436px; top: 72px; transform: none; }
+  .mtile.mini { width: 26px; height: 36px; font-size: 12px; }
+  body:not(.is-mobile) .mj-melds-2 { left: calc(50% + 142px); }
+  body:not(.is-mobile) .mj-melds-3 { left: 186px; }
+}
+
 /* ---------------- 副露条：贴各家牌河末端，归属分明 ---------------- */
 .mj-melds-strip {
   position: absolute;

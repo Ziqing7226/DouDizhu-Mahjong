@@ -404,11 +404,18 @@
   function renderRiver(seat, tiles, lastId) {
     var w = DOM.rivers[seat];
     if (!w) return;
-    // 容量按布局取：宽屏手机（AR≥2）牌河扩容 30 张，其余 18 张。
-    // 窗口跨阈值时下一回合 renderAll 自动更新（限制如实标注）。
+    // 容量按布局取：宽屏手机（AR≥2）与桌面（视口≥700 高）牌河扩容 30 张，
+    // 其余 18 张。窗口跨阈值时下一回合 renderAll 自动更新（限制如实标注）。
     var cap = 18;
     try {
-      if (global.matchMedia && global.matchMedia('(min-aspect-ratio: 2/1)').matches) cap = 30;
+      var mm = global.matchMedia;
+      if (mm) {
+        var mobileLayout = global.document.body.classList.contains('is-mobile');
+        var expanded = mobileLayout
+          ? mm('(min-aspect-ratio: 2/1)').matches
+          : mm('(min-height: 700px)').matches;
+        if (expanded) cap = 30;
+      }
     } catch (e) { /* 无 matchMedia 环境（测试桩）保持 18 */ }
     w.innerHTML = '';
     // 定格最近 cap 张：面积恒定，杜绝堆叠与外溢（更早的弃牌不再展示）
