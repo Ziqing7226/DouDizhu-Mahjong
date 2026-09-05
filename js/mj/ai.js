@@ -269,8 +269,10 @@
    */
   function selfCheck(ctx) {
     var res = { win: Rules.isWin(ctx.counts, ctx.meldBudget), gangIdx: -1, jiagangIdx: -1 };
-    // 副露上限 4 组：满编后不再暗杠/加杠（meldBudget = 4 − 副露数 ≤ 0）
-    if (!res.win && ctx.meldBudget > 0) {
+    // 副露上限 4 组：满编后不再暗杠/加杠（meldBudget = 4 − 副露数 ≤ 0）；
+    // 空墙同样不得开杠——杠后要从墙尾补 1 张岭上牌，无牌可补时杠会直接
+    // 导致荒庄并吞掉自己的最后一弃（明杠在 buildClaims 已有同款守卫）
+    if (!res.win && ctx.meldBudget > 0 && (ctx.wallLeft | 0) > 0) {
       var i;
       for (i = 0; i < 34; i++) {
         if (ctx.counts[i] === 4) { res.gangIdx = i; break; }

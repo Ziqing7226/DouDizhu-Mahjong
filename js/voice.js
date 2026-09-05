@@ -11,10 +11,12 @@
  * voice.js —— 出牌语音播报（预录制音频包 + 语义音效兜底，两层引擎）
  *
  * 0. 预录制音频包（js/voice/*.mp3，Edge TTS YunxiaNeural 生成）：
- *    首次用户手势时批量 fetch + decodeAudioData 预加载到内存。
+ *    首次用户手势时批量 fetch + decodeAudioData 预加载到内存（仅 http/https；
+ *    file:// 下 fetch 会被浏览器按跨域拦截，改走 HTMLAudio 兜底，同样能播）。
  *    播报时按文本精确匹配播放，全平台一致、零延迟、标准普通话。
- *    男声座位用 playbackRate 0.85 变调。全部播报均为静态短语（107 条），
- *    动态内容（如别家胡牌）也由「方位+胡了」等固定短语覆盖。
+ *    男声座位用 playbackRate 0.85 降速降调（preservesPitch=false）。
+ *    全部播报均为静态短语（107 条），动态内容（如别家胡牌）也由
+ *    「方位+胡了」等固定短语覆盖。
  * 1. 语义音效（audio.js 合成）：音频包未加载完成 / 缺文件时的兜底。
  *
  * 历史：曾用 meSpeak/eSpeak 本地合成（共振峰合成，中文四声缺失听感
@@ -42,10 +44,15 @@
     return text.replace(/[\\/:*?"<>|\s]/g, '_');
   }
 
-  /** 首次用户手势时批量预加载音频包 */
+  /** 首次用户手势时批量预加载音频包。
+   *  仅 http/https 走 fetch：file:// 下浏览器会把 fetch 按跨域一律拦截
+   *  （origin 为 null），白发 107 个必败请求；file:// 由 HTMLAudio 兜底。 */
   function loadVoicePack() {
     if (packLoaded) return;
     packLoaded = true;
+    if (typeof global.fetch !== 'function') return;
+    var proto = global.location ? global.location.protocol : '';
+    if (proto !== 'http:' && proto !== 'https:') return;
     var ac = getAudioContext();
     if (!ac) return;
 
@@ -74,9 +81,9 @@
       var url = 'js/voice/' + safeFileName(text) + '.mp3';
       fetch(url)
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
-        .then(function (ab) { return ac.decodeAudioData(ab); })
-        .then(function (buf) { audioBuffers[key] = buf; })
-        .catch(function () { /* 缺文件静默忽略 */ });
+      .then(function (ab) { return ac.decodeAudioData(ab); })
+      .then(function (buf) { audioBuffers[key] = buf; packReady = true; })
+      .catch(function () { /* 缺文件静默忽略（播放时走元素兜底） */ });
     });
   }
 
@@ -84,23 +91,49 @@
     return global.Sound && global.Sound.getRawContext ? global.Sound.getRawContext() : null;
   }
 
-  /** 播放预录制音频，返回是否成功 */
-  function playPre(text, gender, excitement) {
+  /** 播放预录制音频，返回是否成功。
+   *  两级通道：WebAudio buffer（http 预加载的主路径）→ HTMLAudio 兜底。 */
+  function playPre(text, gender, excitement, cue) {
     var key = phraseKey(text);
     var buf = audioBuffers[key];
-    if (!buf) return false;
-    var ac = getAudioContext();
-    if (!ac || ac.state !== 'running') return false;
+    if (buf) {
+      var ac = getAudioContext();
+      if (ac && ac.state === 'running') {
+        try {
+          var src = ac.createBufferSource();
+          src.buffer = buf;
+          src.playbackRate.value = gender === 'male' ? 0.85 : (excitement ? 1.08 : 1.0);
+          var gain = ac.createGain();
+          gain.gain.value = excitement ? 0.9 : 0.72;
+          src.connect(gain);
+          gain.connect(ac.destination);
+          src.start(0);
+          return true;
+        } catch (e) { /* 落入元素兜底 */ }
+      }
+    }
+    return playViaAudioEl(text, gender, excitement, cue);
+  }
 
+  /** HTMLAudio 兜底：file:// 下 fetch 被浏览器按跨域拦截拿不到 AudioBuffer，
+   *  但 <audio> 加载相对路径不受限。playbackRate 降速同时降调（0.85 男声
+   *  变调 / 1.08 情绪加速），关掉 preservesPitch 的「保音高」才能复刻
+   *  重采样的降调效果（老 Safari 只认 webkitPreservesPitch，双写）。 */
+  function playViaAudioEl(text, gender, excitement, cue) {
+    if (typeof global.Audio !== 'function') return false;
     try {
-      var src = ac.createBufferSource();
-      src.buffer = buf;
-      src.playbackRate.value = gender === 'male' ? 0.85 : (excitement ? 1.08 : 1.0);
-      var gain = ac.createGain();
-      gain.gain.value = excitement ? 0.9 : 0.72;
-      src.connect(gain);
-      gain.connect(ac.destination);
-      src.start(0);
+      var a = new global.Audio('js/voice/' + safeFileName(text) + '.mp3');
+      a.volume = excitement ? 0.9 : 0.72;
+      a.playbackRate = gender === 'male' ? 0.85 : (excitement ? 1.08 : 1.0);
+      a.preservesPitch = false;
+      a.webkitPreservesPitch = false;
+      var p = a.play();
+      if (p && p.then) {
+        p.then(function () { packReady = true; })
+          .catch(function () { cueFor(cue); });   // 播放失败（缺文件等）→ 提示音兜底
+      } else {
+        packReady = true;
+      }
       return true;
     } catch (e) { return false; }
   }
@@ -149,8 +182,8 @@
   function speak(text, gender, excitement, cue) {
     if (!enabled || !text) return;
 
-    // Layer 0: 预录制音频
-    if (playPre(text, gender, excitement)) return;
+    // Layer 0: 预录制音频（WebAudio buffer → HTMLAudio 兜底）
+    if (playPre(text, gender, excitement, cue)) return;
 
     // Layer 1: 语义音效兜底
     cueFor(cue);
@@ -209,12 +242,14 @@
   }
 
   function engineText() {
-    if (packReady && Object.keys(audioBuffers).length > 20) return '预录制语音包（107 条）';
+    // packReady 表示任一通道（WebAudio 预加载 / HTMLAudio 兜底）真实出过声
+    if (packReady) return '预录制语音包（107 条）';
     return '提示音（语音包未加载完成）';
   }
 
   global.Voice = {
     comboText: comboText,
+    phraseKey: phraseKey,
     announcePlay: announcePlay,
     announcePass: announcePass,
     announceBid: announceBid,

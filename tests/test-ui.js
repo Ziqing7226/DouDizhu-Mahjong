@@ -1129,6 +1129,16 @@ try {
 } catch (e) { voiceErr = e; }
 ok(!voiceErr, '无 speechSynthesis 时未静默降级: ' + (voiceErr && voiceErr.message));
 
+// 无 fetch 环境（测试桩 / 老浏览器）的语音包加载必须安静跳过——
+// 不能抛异常打断 pointerdown 手势处理器里排在后面的 Bgm.start
+let warmErr = null;
+try { ctx.Voice.warmup(); } catch (e) { warmErr = e; }
+ok(!warmErr, '无 fetch 环境 warmup 抛异常: ' + (warmErr && warmErr.message));
+
+// 播报文本 → 音频包 key 的去标点口径（与 tools/gen-voice-pack.js 短语表对齐）
+ok(ctx.Voice.phraseKey('王炸！') === '王炸', 'phraseKey 应去掉情绪叹号');
+ok(ctx.Voice.phraseKey('东位胡了') === '东位胡了', 'phraseKey 不应误伤普通文本');
+
 console.log('\n=== 拖动连选 ===');
 
 // 给桩元素布上矩形：第 i 张可见条带 = [40+30i, 40+30(i+1))，模拟负边距叠放
