@@ -322,6 +322,17 @@
     });
     if (cand.length < count) return [];
     cand.sort(function (a, b) { return a.rank - b.rank; });
+    // 欢乐斗地主：一套单张翅膀不得同时含大小王（王炸不可拆为翅膀/带牌），
+    // 与 parse 的 wingsOk / 四带二守卫同口径——否则会生成 parse 拒绝的
+    // 死候选，流到玩家提示里高亮一手非法牌
+    var hasBothJokers = function (set) {
+      var w = false, W = false;
+      for (var i = 0; i < set.length; i++) {
+        if (set[i].rank === 16) w = true;
+        else if (set[i].rank === 17) W = true;
+      }
+      return w && W;
+    };
     var sets = [];
     var pick = function (offset) {
       var out = [];
@@ -333,10 +344,10 @@
       return out;
     };
     var s0 = pick(0);
-    if (s0) sets.push(s0);
+    if (s0 && !hasBothJokers(s0)) sets.push(s0);
     // 再给一套「跳过最小的」方案，避免把关键小牌浪费掉
     var s1 = pick(1);
-    if (s1 && cand.length > count) sets.push(s1);
+    if (s1 && !hasBothJokers(s1) && cand.length > count) sets.push(s1);
     return sets;
   }
 

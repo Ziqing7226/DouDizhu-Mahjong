@@ -162,6 +162,46 @@ ok(r7.some(x => x === '999w'), '三带一应能生成带小王的候选，实际
 let r8 = beatsOf('9 9 9 4 w', '7 7 7 5');
 ok(r8.some(x => x === '9994'), '有普通牌时应优先用普通牌作翅膀，实际 ' + JSON.stringify(r8));
 
+// 王炸不可拆为翅膀/带牌（欢乐斗地主规则）：任何压制候选都不得同时含双王
+let r9 = beatsOf('9 9 9 9 w W', '8 8 8 8 5 6');
+ok(r9.every(x => x !== '9999wW'), '四带二候选不得含双王翅膀，实际 ' + JSON.stringify(r9));
+ok(r9.some(x => x === '9999'), '炸弹 9999 仍是合法候选，实际 ' + JSON.stringify(r9));
+let r10 = beatsOf('9 9 9 9 5 w W', '8 8 8 8 3 4');
+ok(r10.some(x => x === '99995w'), '第二套翅膀路径应生成 9999+5+w，实际 ' + JSON.stringify(r10));
+// 「wW」是王炸候选（合法可压四带二），其余候选不得以双王为翅膀
+ok(r10.every(x => x === 'wW' || !(x.includes('w') && x.includes('W'))),
+  '除王炸外任何候选不得同时含双王，实际 ' + JSON.stringify(r10));
+
+// 玩家提示路径不得出现 parse 不出的组合（AI.decideFollow 自身有 parse 过滤，
+// hintCandidates 曾漏过滤——死候选会高亮一手非法牌）
+{
+  const hintDead = AI.hintCandidates(H('9 9 9 9 w W'), Cards.parse(H('8 8 8 8 5 6')))
+    .filter(cs => !Cards.parse(cs));
+  ok(hintDead.length === 0, '提示候选不得含非法组合，实际 ' +
+    JSON.stringify(hintDead.map(cs => cs.map(c => c.label).join(''))));
+}
+
+// easy 逃牌拦截：优先非炸弹的最小能压牌；只有炸弹能压时才动用炸弹
+//（escape 分支绕过随机数，用例确定）
+{
+  const easyBlock = AI.decidePlay({
+    difficulty: 'easy', hand: H('2 3 3 3 3'), seat: 2, role: 'farmer',
+    landlordSeat: 0, teammateSeat: 1, lastCombo: Cards.parse(H('A')),
+    lastSeat: 0, counts: [1, 5, 5], played: []
+  });
+  ok(easyBlock && Cards.parse(easyBlock.cards).type === CT.SINGLE,
+    'easy 拦截持 2 时应出单 2 而非炸弹，实际 ' +
+    (easyBlock ? easyBlock.cards.map(c => c.label).join('') : 'null'));
+  const easyBomb = AI.decidePlay({
+    difficulty: 'easy', hand: H('3 3 3 3 5'), seat: 2, role: 'farmer',
+    landlordSeat: 0, teammateSeat: 1, lastCombo: Cards.parse(H('A')),
+    lastSeat: 0, counts: [1, 5, 5], played: []
+  });
+  ok(easyBomb && Cards.parse(easyBomb.cards).type === CT.BOMB,
+    'easy 拦截仅剩炸弹可压时才出炸弹，实际 ' +
+    (easyBomb ? easyBomb.cards.map(c => c.label).join('') : 'null'));
+}
+
 console.log('=== 手牌拆解 ===');
 
 const d1 = Dec.decompose(H('3 4 5 6 7 8 8'));

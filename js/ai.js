@@ -1210,9 +1210,12 @@
     if (ctx.difficulty === 'easy') {
       var escape = (ctx.counts[lastSeat] <= 2 && !isTeammate);
       if (!escape && Math.random() < cfg.passChance) return null;
-      var pool = escape ? cands : cands.filter(function (x) {
+      var nonBomb = cands.filter(function (x) {
         return x.combo.type !== CT.BOMB && x.combo.type !== CT.ROCKET;
       });
+      // 拦截优先用非炸弹的最小能压牌；只有炸弹能压时才动用——
+      // 拦下即将逃跑的敌人值得一颗炸弹，但持 2 可拦时炸出去是浪费
+      var pool = escape ? (nonBomb.length ? nonBomb : cands) : nonBomb;
       if (!pool.length) return null;
       pool.sort(function (a, b) { return powerOf(a.cards) - powerOf(b.cards); });
       return { cards: Cards.sortAsc(pool[0].cards.slice()), combo: pool[0].combo, tag: 'easy' };
@@ -1368,6 +1371,7 @@
           .sort(function (a, b) { return a - b; }).join('-');
         if (seen.has(key)) continue;
         seen.add(key);
+        if (!Cards.parse(list[i])) continue;   // 双保险：过滤非法组合（如双王翅膀）
         out.push(list[i]);
       }
       out.sort(function (a, b) {
