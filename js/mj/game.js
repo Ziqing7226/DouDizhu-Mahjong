@@ -363,14 +363,22 @@
   }
 
   function selfCheckCtx(p) {
-    return {
+    var ctx = {
       counts: Tiles.countsOf(p.hand),
       meldBudget: meldBudget(p),
       wallLeft: G.wall.length,
       difficulty: G.difficulty,
+      seat: p.seat,
       pengMelds: p.melds.filter(function (m) { return m.type === 'peng'; })
         .map(function (m) { return m.tiles[0]; })
     };
+    // 大师档完全信息：仅 AI 座位传入，供加杠保安查抢杠风险（与 aiCtx 同构）。
+    // 人类玩家不传——加杠是否冒险由玩家自己判断，不替玩家做决定
+    if (G.difficulty === 'master' && p.isAI) {
+      ctx.hands = G.players.map(function (q) { return q.hand; });
+      ctx.meldCounts = G.players.map(function (q) { return q.melds.length; });
+    }
+    return ctx;
   }
 
   function aiDrawAction(p, afterMeld) {

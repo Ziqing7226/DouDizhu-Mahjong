@@ -13,8 +13,11 @@
  *   easy   「新手」出牌只看单张价值，副露全凭心血来潮，不数进张
  *   hard   「高手」最小向听 + 最大进张（受入牌）选择打牌，副露以向听改善为准
  *   master 「大师」完全信息（看穿他家手牌与真实牌墙）：攻防随自己向听
- *          动态切换——听牌全力避炮、一向听偏防守、两向听以上纯进攻，
- *          点炮必死张恒定重罚；平级副露更积极（进张 0.85 阈值）；
+ *          动态切换——听牌全力避炮、一向听偏防守、两向听以上纯进攻；
+ *          存在安全候选时绝不点炮（必死张重罚），所有保向听候选都致命时
+ *          以 foldProb 概率拆牌弃和、否则坚持听牌赌抢和；加杠前查他家听牌，
+ *          必被抢杠的加杠直接放弃（仅 AI，人类玩家按钮不受限）；
+ *          平级副露更积极（进张 0.85 阈值）；
  *          进张按真实牌墙余量计算
  * 纯逻辑模块，可在 Node 中直接 require 做单元测试。
  * ========================================================================== */
@@ -29,6 +32,26 @@
     easy: { name: '新手', thinkMs: [1000, 3000], claimWhim: 0.4 },
     hard: { name: '高手', thinkMs: [1000, 3000], claimWhim: 0 },
     master: { name: '大师', thinkMs: [1000, 3000], claimWhim: 0 }
+  };
+
+  /**
+   * 大师档点炮行为旋钮（tests/mj-sim.js 扫参标定用，运行时可改）：
+   *   deadlyConst  点炮必死张的固定罚分。实测点炮只发生在「所有保向听候选
+   *                都致命」的局面（罚分等量作用于全体候选，改大小无效，
+   *                30/35/50/100000 轨迹完全一致），故此值只需保证「存在安全
+   *                候选时必不点炮」即可，无需标定。
+   *   foldProb     全致命时拆牌弃和的概率：以 (1−foldProb) 概率坚持听牌赌
+   *                抢和（真人大师「多数弃和、偶尔玉碎」的画像）。点炮率的
+   *                主旋钮。
+   *   jiagangGuard 加杠保安的执行概率：有人正听这张牌时放弃加杠（1 = 必拦）。
+   *                完全信息下宣杠必被抢，等于送炮；已碰之牌的第 4 张对牌型
+   *                毫无贡献，拦下只损失岭上收益。仅对 AI 生效——人类玩家的
+   *                加杠按钮不受影响，是否冒险由玩家自己决定。
+   */
+  var TUNE = {
+    deadlyConst: 30,
+    foldProb: 0.75,
+    jiagangGuard: 1
   };
 
   /* ---------------- 向听缓存 ---------------- */
@@ -129,13 +152,13 @@
 
     var cands = [];
     var i, t;
-    // 第一轮：打完后的向听
+    // 第一轮：打完后的向听（顺带标记点炮必死张，供弃和逻辑全候选使用）
     for (i = 0; i < 34; i++) {
       if (c[i] === 0) continue;
       c[i]--;
       var sh = cachedShanten(c, budget);
       c[i]++;
-      cands.push({ drop: i, shanten: sh });
+      cands.push({ drop: i, shanten: sh, deadly: !!(deadly && deadly[i]) });
     }
     if (!cands.length) return cands;
     var bestSh = Math.min.apply(null, cands.map(function (x) { return x.shanten; }));
@@ -171,9 +194,9 @@
         f.ukeire = Rules.ukeire(c, budget, f.drop, unseen);
       }
       f.danger = dangerOf(f.drop, ctx);
-      // 大师：点炮必死的张独立重罚，不随进攻模式衰减——
-      // 自己胡不了更不能点炮，这张牌任何向听下都不该打
-      f.deadly = !!(deadly && deadly[f.drop]);
+      // 大师：点炮必死张固定重罚——作用是「存在安全候选时必不点炮」；
+      // 全致命局面的处置见 decideDiscard 的弃和逻辑（罚分大小在那里无效）
+      f.deadlyPen = f.deadly ? TUNE.deadlyConst : 0;
       f.keep = keepValue(c, f.drop);
     }
 
@@ -183,9 +206,9 @@
         return (b.keep + Math.random() * 3) - (a.keep + Math.random() * 3);
       }
       // 高手/大师：进张优先（大师竞速模式下加码）；危险度按上方的
-      // 攻防权重折算，点炮必死张另计固定大罚分（恒定，不随攻防模式衰减）
-      var da = (ctx.opponentTenpaiish ? dw * a.danger : 0.3 * a.danger) + (a.deadly ? 30 : 0);
-      var db = (ctx.opponentTenpaiish ? dw * b.danger : 0.3 * b.danger) + (b.deadly ? 30 : 0);
+      // 攻防权重折算，点炮必死张另计固定罚分（见 TUNE 注释）
+      var da = (ctx.opponentTenpaiish ? dw * a.danger : 0.3 * a.danger) + a.deadlyPen;
+      var db = (ctx.opponentTenpaiish ? dw * b.danger : 0.3 * b.danger) + b.deadlyPen;
       var va = a.ukeire.count * uw - da + a.keep * 0.3;
       var vb = b.ukeire.count * uw - db + b.keep * 0.3;
       return vb - va;
@@ -200,6 +223,25 @@
     if (ctx.difficulty === 'easy' && Math.random() < 0.25) {
       // 新手偶尔手滑，打个不是最差的
       return ranked[Math.min(ranked.length - 1, (Math.random() * ranked.length) | 0)].drop;
+    }
+    // 大师弃和：排到第一的是点炮必死张，说明所有保向听候选都致命（有安全
+    // 候选时它已被重罚压下去）。此时以 foldProb 概率拆牌弃和——优先在非致命
+    // 候选里挑最安全的一张退向听；否则坚持听牌赌抢和（玉碎）。真人大师被
+    // 听死时多数弃和、偶尔硬顶，点炮率由此旋钮标定
+    if (ctx.difficulty === 'master' && ranked[0].deadly &&
+      Math.random() < TUNE.foldProb) {
+      var pool = [], i, safe = [];
+      for (i = 0; i < ranked.length; i++) {
+        if (!ranked[i].deadly) safe.push(ranked[i]);
+      }
+      pool = safe.length ? safe : ranked;
+      var best = null, bestScore = Infinity;
+      for (i = 0; i < pool.length; i++) {
+        // 弃和选牌：安全第一（危险度最小），同险保留价值优先（保搭子少拆好形）
+        var s = dangerOf(pool[i].drop, ctx) * 10 - keepValue(ctx.counts, pool[i].drop) * 0.1;
+        if (s < bestScore) { bestScore = s; best = pool[i].drop; }
+      }
+      if (best !== null) return best;
     }
     return ranked[0].drop;
   }
@@ -290,12 +332,23 @@
         var c = ctx.counts.slice(); c[res.gangIdx] = 0;
         if (cachedShanten(c, ctx.meldBudget - 1) <= 1) res.gangIdx = -1;
       }
+      // 加杠保安（仅 AI，大师完全信息）：若有人正听这张牌，宣杠必被抢——
+      // 抢杠等于点炮且无法反悔。这张牌对牌型毫无贡献（3 张已在副露里），
+      // 放弃加杠只损失岭上收益，故听牌命中即拦（概率由 TUNE.jiagangGuard
+      // 控制）。人类座位不经此分支（selfCheckCtx 不为其传 hands），
+      // 加杠按钮照常点亮，是否冒险由玩家自己决定
+      if (res.jiagangIdx >= 0 && ctx.difficulty === 'master' &&
+        ctx.hands && Math.random() < TUNE.jiagangGuard) {
+        var jd = exactDeadly(ctx);
+        if (jd && jd[res.jiagangIdx]) res.jiagangIdx = -1;
+      }
     }
     return res;
   }
 
   global.MjAI = {
     CFG: CFG,
+    TUNE: TUNE,
     resetCache: resetCache,
     rankDiscards: rankDiscards,
     decideDiscard: decideDiscard,
