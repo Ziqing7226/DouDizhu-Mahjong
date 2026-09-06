@@ -171,9 +171,10 @@
    *   控制力 —— 王炸 +8、单王 +3 / +3.5、每个 2 +2、每个 A +1、普通炸弹 +5
    *   结构   —— 最优拆解手数越少越顺，每手 −1.2（17 张纯随机约 7~10 手）
    * 手段：随机发 N 副，取玩家 17 张评分最高的一副（best-of-N）。
-   *   新手 N≈6：好牌明显偏多；高手 N≈3：略偏；大师 N=1：纯随机。
-   * 隐蔽性：best-of 只抬高期望、不构造固定牌型，且 N 带随机抖动，
-   * 手牌外观每局仍完全多样，玩家不会感到「每局牌都相似」。
+   *   新手 N=5~7 抖动：好牌明显偏多；高手固定 N=3：略偏；
+   *   大师 N=1：纯随机。高手固定 K=3 与 tests/calibrate-deal.js 的
+   *   标定口径一致（文档均值 +0.52 按此口径）。
+   * 隐蔽性：best-of 只抬高期望、不构造固定牌型，手牌外观每局仍完全多样。
    */
   function handStrength(hand) {
     var cnt = {};
@@ -194,7 +195,7 @@
 
   function riggedDeck(difficulty) {
     var n = difficulty === 'easy' ? 5 + ((Math.random() * 3) | 0)
-          : difficulty === 'hard' ? 2 + ((Math.random() * 2) | 0)
+          : difficulty === 'hard' ? 3
           : 1;
     if (n <= 1) return Cards.shuffle(Cards.makeDeck());
     var best = null, bestScore = -1e9;
