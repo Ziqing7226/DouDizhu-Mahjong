@@ -10,3 +10,4 @@ desktop.ini
 node_modules
 package-lock.json
 .zcode/
+.save-server.ps1

@@ -44,6 +44,9 @@ async function generateAll() {
 
     if (fs.existsSync(filePath) && fs.statSync(filePath).size > 500) continue;
 
+    // 圈/七 不走 TTS：圈 从"圆圈"帧级切割截取 quān；七 从"七条"截取
+    // 前 24%+3 帧尾音。这两个文件已手动放置，exists-check 会跳过。
+
     try {
       var tts = new MsEdgeTTS();
       await tts.setMetadata(VOICE, 'audio-24khz-48kbitrate-mono-mp3');

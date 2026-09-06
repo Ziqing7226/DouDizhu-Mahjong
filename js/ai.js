@@ -92,7 +92,7 @@
   var CFG = {
     easy: {
       name: '新手',
-      passChance: 0.42,
+      passChance: 0.2,
       bombPenalty: 999,
       leadBombPenalty: 999,
       useUnseen: false,
@@ -1203,15 +1203,19 @@
       }
     }
 
-    /* --- easy：多数时候直接不要，出牌只挑最小的 --- */
+    /* --- easy：多数时候直接不要，出牌只挑最小的 ---
+     * 唯一例外：出牌方是敌方且只剩 ≤2 张（即将跑掉）——此时新手也
+     * 会用最小的能压牌拦一下，随机不要会让新手场失去对局感
+     * （此前提交只修了领出兜底路径，跟牌路径漏网） */
     if (ctx.difficulty === 'easy') {
-      if (Math.random() < cfg.passChance) return null;
-      var nonBomb = cands.filter(function (x) {
+      var escape = (ctx.counts[lastSeat] <= 2 && !isTeammate);
+      if (!escape && Math.random() < cfg.passChance) return null;
+      var pool = escape ? cands : cands.filter(function (x) {
         return x.combo.type !== CT.BOMB && x.combo.type !== CT.ROCKET;
       });
-      if (!nonBomb.length) return null;
-      nonBomb.sort(function (a, b) { return powerOf(a.cards) - powerOf(b.cards); });
-      return { cards: Cards.sortAsc(nonBomb[0].cards.slice()), combo: nonBomb[0].combo, tag: 'easy' };
+      if (!pool.length) return null;
+      pool.sort(function (a, b) { return powerOf(a.cards) - powerOf(b.cards); });
+      return { cards: Cards.sortAsc(pool[0].cards.slice()), combo: pool[0].combo, tag: 'easy' };
     }
 
     /* --- 队友出的牌：不压，把机会留给他 --- */
