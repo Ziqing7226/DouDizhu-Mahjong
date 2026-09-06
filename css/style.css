@@ -1590,7 +1590,7 @@ body {
 .is-mobile .logo { font-size: 21px; }
 .is-mobile .lobby-btn { padding: 5px 11px; font-size: 12px; }
 .is-mobile .topbar-right { gap: 7px; }
-.is-mobile .vol-slider { display: none; }
+.is-mobile .vol-slider { width: 64px; }
 .is-mobile .icon-btn { width: 38px; height: 34px; font-size: 16px; }
 
 /* ---- 主区：让牌桌占满整个设计宽度 ---- */

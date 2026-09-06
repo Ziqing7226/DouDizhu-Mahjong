@@ -31,13 +31,55 @@
 
   /* ---- 预录制音频包 ---- */
 
-  var audioBuffers = {};       // 播报短语 → AudioBuffer（短语即键即文件名）
+  var audioBuffers = {};       // 播报短语 → AudioBuffer（短语即键，文件名经 fileNames 映射）
   var packLoaded = false;      // 是否已开始 / 完成加载
   var packReady = false;       // 至少加载了一个文件
 
-  function safeFileName(text) {
-    return text.replace(/[\\/:*?"<>|\s]/g, '_');
-  }
+  /* ---- 播报短语清单（唯一权威，与 tools/gen-voice-pack.js 保持同步） ---- */
+
+  var MANIFESTS = [
+    '三', '四', '五', '六', '七', '八', '九', '十', '钩', '圈', 'K', '尖', '二',
+    '小王', '大王',
+    '对三', '对四', '对五', '对六', '对七', '对八', '对九', '对十',
+    '对钩', '对圈', '对K', '对尖', '对二',
+    '三个三', '三个四', '三个五', '三个六', '三个七', '三个八', '三个九',
+    '三个十', '三个钩', '三个圈', '三个K', '三个尖', '三个二',
+    '三带一', '三带二', '顺子', '连对', '飞机', '飞机带单', '飞机带对',
+    '四带二', '四带两对', '王炸', '炸弹',
+    '一万', '二万', '三万', '四万', '五万', '六万', '七万', '八万', '九万',
+    '一条', '二条', '三条', '四条', '五条', '六条', '七条', '八条', '九条',
+    '一筒', '二筒', '三筒', '四筒', '五筒', '六筒', '七筒', '八筒', '九筒',
+    '东风', '南风', '西风', '北风', '红中', '发财', '白板',
+    '吃', '碰', '杠', '暗杠', '加杠', '胡了', '我胡了',
+    '东位胡了', '南位胡了', '西位胡了', '北位胡了',
+    '不要', '过', '不叫', '一分', '两分', '三分',
+    '叫地主', '加倍', '不加倍', '超级加倍'
+  ];
+
+  /* ---- 拼音文件名映射：中文文件名在部分服务端/CDN 上有 URL 编码兼容风险
+   *  （iPad 实测预加载 12/107 停滞），统一改为无声调全拼连写。
+   *  多音字按全部短语中的唯一读法硬编码；107 条经脚本校验零重名。
+   *  改动短语清单时必须同步 PINYIN 并重跑 tools/gen-voice-pack.js。 ---- */
+  var PINYIN = {
+    '三': 'san', '四': 'si', '五': 'wu', '六': 'liu', '七': 'qi', '八': 'ba',
+    '九': 'jiu', '十': 'shi', '钩': 'gou', '圈': 'quan', 'K': 'K', '尖': 'jian',
+    '二': 'er', '小': 'xiao', '王': 'wang', '大': 'da', '对': 'dui', '个': 'ge',
+    '带': 'dai', '顺': 'shun', '子': 'zi', '连': 'lian', '飞': 'fei', '机': 'ji',
+    '单': 'dan', '两': 'liang', '炸': 'zha', '弹': 'dan', '万': 'wan',
+    '条': 'tiao', '筒': 'tong', '东': 'dong', '南': 'nan', '西': 'xi',
+    '北': 'bei', '风': 'feng', '红': 'hong', '中': 'zhong', '发': 'fa',
+    '财': 'cai', '白': 'bai', '板': 'ban', '吃': 'chi', '碰': 'peng',
+    '杠': 'gang', '暗': 'an', '加': 'jia', '胡': 'hu', '了': 'le', '我': 'wo',
+    '位': 'wei', '不': 'bu', '要': 'yao', '过': 'guo', '叫': 'jiao',
+    '一': 'yi', '分': 'fen', '超': 'chao', '级': 'ji', '地': 'di', '主': 'zhu',
+    '倍': 'bei'
+  };
+  var fileNames = {};
+  MANIFESTS.forEach(function (t) {
+    var p = '';
+    for (var i = 0; i < t.length; i++) p += PINYIN[t[i]] || '';
+    fileNames[t] = p + '.mp3';
+  });
 
   /** 首次用户手势时批量预加载音频包。
    *  仅 http/https 走 fetch：file:// 下浏览器会把 fetch 按跨域一律拦截
@@ -51,29 +93,9 @@
     var ac = getAudioContext();
     if (!ac) return;
 
-    var manifests = [
-      '三', '四', '五', '六', '七', '八', '九', '十', '钩', '圈', 'K', '尖', '二',
-      '小王', '大王',
-      '对三', '对四', '对五', '对六', '对七', '对八', '对九', '对十',
-      '对钩', '对圈', '对K', '对尖', '对二',
-      '三个三', '三个四', '三个五', '三个六', '三个七', '三个八', '三个九',
-      '三个十', '三个钩', '三个圈', '三个K', '三个尖', '三个二',
-      '三带一', '三带二', '顺子', '连对', '飞机', '飞机带单', '飞机带对',
-      '四带二', '四带两对', '王炸', '炸弹',
-      '一万', '二万', '三万', '四万', '五万', '六万', '七万', '八万', '九万',
-      '一条', '二条', '三条', '四条', '五条', '六条', '七条', '八条', '九条',
-      '一筒', '二筒', '三筒', '四筒', '五筒', '六筒', '七筒', '八筒', '九筒',
-      '东风', '南风', '西风', '北风', '红中', '发财', '白板',
-      '吃', '碰', '杠', '暗杠', '加杠', '胡了', '我胡了',
-      '东位胡了', '南位胡了', '西位胡了', '北位胡了',
-      '不要', '过', '不叫', '一分', '两分', '三分',
-      '叫地主', '加倍', '不加倍', '超级加倍'
-    ];
-
-    manifests.forEach(function (text) {
+    MANIFESTS.forEach(function (text) {
       if (audioBuffers[text]) return;
-      var url = 'js/voice/' + safeFileName(text) + '.mp3';
-      fetch(url)
+      fetch('js/voice/' + fileNames[text])
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
       .then(function (ab) { return ac.decodeAudioData(ab); })
       .then(function (buf) { audioBuffers[text] = buf; packReady = true; })
@@ -113,9 +135,10 @@
    *  变调 / 1.08 情绪加速），关掉 preservesPitch 的「保音高」才能复刻
    *  重采样的降调效果（老 Safari 只认 webkitPreservesPitch，双写）。 */
   function playViaAudioEl(text, gender, excitement, cue) {
-    if (typeof global.Audio !== 'function') return false;
+    var fname = fileNames[text];
+    if (!fname || typeof global.Audio !== 'function') { cueFor(cue); return true; }
     try {
-      var a = new global.Audio('js/voice/' + safeFileName(text) + '.mp3');
+      var a = new global.Audio('js/voice/' + fname);
       a.volume = excitement ? 0.9 : 0.72;
       a.playbackRate = gender === 'male' ? 0.85 : (excitement ? 1.08 : 1.0);
       a.preservesPitch = false;

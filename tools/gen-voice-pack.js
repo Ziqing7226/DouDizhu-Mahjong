@@ -7,28 +7,47 @@ var MsEdgeTTS = require(path.join(__dirname, '..', 'node_modules', 'msedge-tts')
 var OUT_DIR = path.join(__dirname, '..', 'js', 'voice');
 var VOICE = 'zh-CN-YunxiaNeural';
 
-var RANK = ['三', '四', '五', '六', '七', '八', '九', '十', '钩', '圈', 'K', '尖', '二'];
-var MJ_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
-var MJ_SUIT = ['万', '条', '筒'];
-var MJ_HONOR = ['东风', '南风', '西风', '北风', '红中', '发财', '白板'];
+/* ---- 权威清单与拼音命名：必须与 js/voice.js 的 MANIFESTS / PINYIN 逐字保持同步 ---- */
 
-var phrases = new Set();
-['小王', '大王'].forEach(function (r) { phrases.add(r); });
-RANK.forEach(function (r) { phrases.add(r); });
-RANK.forEach(function (r) { phrases.add('对' + r); });
-// 三个X 全量 13 档（与 voice.js manifest 对齐，缺一个就会静默回退系统 TTS）
-RANK.forEach(function (r) { phrases.add('三个' + r); });
-['三带一', '三带二', '顺子', '连对', '飞机', '飞机带单', '飞机带对',
- '四带二', '四带两对', '王炸', '炸弹'].forEach(function (p) { phrases.add(p); });
-['不要', '过', '不叫', '一分', '两分', '三分'].forEach(function (p) { phrases.add(p); });
-phrases.add('叫地主');
-['加倍', '不加倍', '超级加倍'].forEach(function (p) { phrases.add(p); });
-MJ_NUM.forEach(function (n) { MJ_SUIT.forEach(function (s) { phrases.add(n + s); }); });
-MJ_HONOR.forEach(function (h) { phrases.add(h); });
-['吃', '碰', '杠', '暗杠', '加杠', '胡了', '我胡了'].forEach(function (p) { phrases.add(p); });
-['东位胡了', '南位胡了', '西位胡了', '北位胡了'].forEach(function (p) { phrases.add(p); });
+var MANIFESTS = [
+  '三', '四', '五', '六', '七', '八', '九', '十', '钩', '圈', 'K', '尖', '二',
+  '小王', '大王',
+  '对三', '对四', '对五', '对六', '对七', '对八', '对九', '对十',
+  '对钩', '对圈', '对K', '对尖', '对二',
+  '三个三', '三个四', '三个五', '三个六', '三个七', '三个八', '三个九',
+  '三个十', '三个钩', '三个圈', '三个K', '三个尖', '三个二',
+  '三带一', '三带二', '顺子', '连对', '飞机', '飞机带单', '飞机带对',
+  '四带二', '四带两对', '王炸', '炸弹',
+  '一万', '二万', '三万', '四万', '五万', '六万', '七万', '八万', '九万',
+  '一条', '二条', '三条', '四条', '五条', '六条', '七条', '八条', '九条',
+  '一筒', '二筒', '三筒', '四筒', '五筒', '六筒', '七筒', '八筒', '九筒',
+  '东风', '南风', '西风', '北风', '红中', '发财', '白板',
+  '吃', '碰', '杠', '暗杠', '加杠', '胡了', '我胡了',
+  '东位胡了', '南位胡了', '西位胡了', '北位胡了',
+  '不要', '过', '不叫', '一分', '两分', '三分',
+  '叫地主', '加倍', '不加倍', '超级加倍'
+];
 
-var LIST = Array.from(phrases);
+var PINYIN = {
+  '三': 'san', '四': 'si', '五': 'wu', '六': 'liu', '七': 'qi', '八': 'ba',
+  '九': 'jiu', '十': 'shi', '钩': 'gou', '圈': 'quan', 'K': 'K', '尖': 'jian',
+  '二': 'er', '小': 'xiao', '王': 'wang', '大': 'da', '对': 'dui', '个': 'ge',
+  '带': 'dai', '顺': 'shun', '子': 'zi', '连': 'lian', '飞': 'fei', '机': 'ji',
+  '单': 'dan', '两': 'liang', '炸': 'zha', '弹': 'dan', '万': 'wan',
+  '条': 'tiao', '筒': 'tong', '东': 'dong', '南': 'nan', '西': 'xi',
+  '北': 'bei', '风': 'feng', '红': 'hong', '中': 'zhong', '发': 'fa',
+  '财': 'cai', '白': 'bai', '板': 'ban', '吃': 'chi', '碰': 'peng',
+  '杠': 'gang', '暗': 'an', '加': 'jia', '胡': 'hu', '了': 'le', '我': 'wo',
+  '位': 'wei', '不': 'bu', '要': 'yao', '过': 'guo', '叫': 'jiao',
+  '一': 'yi', '分': 'fen', '超': 'chao', '级': 'ji', '地': 'di', '主': 'zhu',
+  '倍': 'bei'
+};
+
+var LIST = MANIFESTS.map(function (text) {
+  var p = '';
+  for (var i = 0; i < text.length; i++) p += PINYIN[text[i]] || '';
+  return { text: text, file: p + '.mp3' };
+});
 console.log('短语数: ' + LIST.length);
 
 async function generateAll() {
@@ -39,8 +58,7 @@ async function generateAll() {
 
   for (var i = 0; i < LIST.length; i++) {
     var text = LIST[i];
-    var safeName = text.replace(/[\\/:*?"<>|\s]/g, '_');
-    var filePath = path.join(OUT_DIR, safeName + '.mp3');
+    var filePath = path.join(OUT_DIR, LIST[i].file);
 
     if (fs.existsSync(filePath) && fs.statSync(filePath).size > 500) continue;
 
