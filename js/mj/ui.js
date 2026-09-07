@@ -203,11 +203,17 @@
     syncTurnClock(seat);
   }
 
-  /** 副露条：四家副露各自贴在牌河末端（不再塞进座位框），归谁的一目了然 */
+  /** 副露条：四家副露各自贴在牌河末端（不再塞进座位框），归谁的一目了然。
+   *  我方/对家「河+副露」成组左右居中（用户定版）：在牌桌上标记该家当前
+   *  是否有副露，无副露时该家牌河独居中，有副露时河让出副露带宽度的一半。 */
   function renderMelds(seat, melds) {
     var strip = DOM.melds && DOM.melds[seat];
     if (!strip) return;
     strip.innerHTML = meldsHtml(melds, seat);
+    if (seat === 0 || seat === 2) {
+      var table = strip.closest('.mj-table');
+      if (table) table.classList.toggle('has-melds-' + seat, !!(melds && melds.length));
+    }
   }
 
   /* ---------------- 回合倒计时环 ----------------
@@ -404,19 +410,8 @@
   function renderRiver(seat, tiles, lastId) {
     var w = DOM.rivers[seat];
     if (!w) return;
-    // 容量按布局取：宽屏手机（AR≥2）与桌面（视口≥700 高）牌河扩容 30 张，
-    // 其余 18 张。窗口跨阈值时下一回合 renderAll 自动更新（限制如实标注）。
-    var cap = 18;
-    try {
-      var mm = global.matchMedia;
-      if (mm) {
-        var mobileLayout = global.document.body.classList.contains('is-mobile');
-        var expanded = mobileLayout
-          ? mm('(min-aspect-ratio: 2/1)').matches
-          : mm('(min-height: 700px)').matches;
-        if (expanded) cap = 30;
-      }
-    } catch (e) { /* 无 matchMedia 环境（测试桩）保持 18 */ }
+    // 容量恒 30 张 3×10（用户定版：桌面/手机、任何分辨率都不再回退 18）
+    var cap = 30;
     w.innerHTML = '';
     // 定格最近 cap 张：面积恒定，杜绝堆叠与外溢（更早的弃牌不再展示）
     // 牌面朝向由 CSS 按河位统一旋转（全部头朝桌心，各家读起来是正的）。
@@ -446,6 +441,7 @@
     hideTableHands();
     handsShown = true;
     if (global.document && global.document.body) global.document.body.classList.add('reveal-mode');
+    applyDesktopTileScale();   // 两态按钮/胶囊不同，尺寸按各自标定重取
     DOM.mjWallInfo.style.display = 'none';
     for (var s = 1; s <= 3; s++) {
       var rv = DOM.rivers && DOM.rivers[s];
@@ -473,6 +469,7 @@
   function hideTableHands() {
     handsShown = false;
     if (global.document && global.document.body) global.document.body.classList.remove('reveal-mode');
+    applyDesktopTileScale();   // 回到对局态标定尺寸
     var old = DOM.mjTable ? DOM.mjTable.querySelectorAll('.remain-tiles') : [];
     for (var i = 0; i < old.length; i++) old[i].remove();
     for (var s = 1; s <= 3; s++) {
@@ -584,6 +581,43 @@
     }
   }
 
+  /* ---------------- 桌面牌面尺寸标定（用户定版法） ----------------
+   * 以常见屏幕比例分类，每比例取一个代表分辨率，实测「对局态 + 复盘态
+   * 零交叠」的临界河牌宽 CPlay / CReveal（手牌 = 河×1.2、副露 = 河÷1.2、
+   * 他家亮牌 = 河×0.7，比例由 CSS 锁死；两态按钮/胶囊不同故分开标定）。
+   * 运行时：同比例分辨率按屏幕等比缩放临界值 —— 因子 = min(vw/w0, vh/h0)，
+   * 显示河牌宽 = floor(C × 0.8 × 因子)（例：1600×900 临界 52 → 显示 41；
+   * 800×450 → (52/2)×0.8 → 20）。手机端不适用（有自己的尺寸体系）。 */
+  var MJ_TILE_CAL = [
+    { ar: 16 / 9, w0: 1600, h0: 900, CPlay: 56.6, CReveal: 52.6 },
+    { ar: 16 / 10, w0: 1280, h0: 800, CPlay: 43.6, CReveal: 41.2 },
+    { ar: 3 / 2, w0: 1500, h0: 1000, CPlay: 52.6, CReveal: 49.3 },
+    { ar: 4 / 3, w0: 1024, h0: 768, CPlay: 33.9, CReveal: 31.4 },
+    { ar: 21 / 9, w0: 2560, h0: 1080, CPlay: 76.9, CReveal: 72.1 }
+  ];
+  function applyDesktopTileScale() {
+    if (typeof document === 'undefined' || !document.body || !document.body.classList) return;
+    if (document.body.classList.contains('is-mobile')) return;
+    var vw = global.innerWidth, vh = global.innerHeight;
+    if (!vw || !vh) return;
+    var ar = vw / vh, best = MJ_TILE_CAL[0], bd = Infinity;
+    for (var i = 0; i < MJ_TILE_CAL.length; i++) {
+      var d = Math.abs(Math.log(ar / MJ_TILE_CAL[i].ar));
+      if (d < bd) { bd = d; best = MJ_TILE_CAL[i]; }
+    }
+    var factor = Math.min(vw / best.w0, vh / best.h0);
+    var C = document.body.classList.contains('reveal-mode') ? best.CReveal : best.CPlay;
+    // 取整向下（用户定版示例：41.6 → 41、20.8 → 20），保守防擦边
+    var rw = Math.floor(C * 0.8 * factor);
+    // 写到 body 内联（变量兜底块就挂在 body 上，内联优先级更高才能覆盖）
+    document.body.style.setProperty('--mj-rw', rw + 'px');
+  }
+
+  if (typeof document !== 'undefined') {
+    applyDesktopTileScale();
+    global.addEventListener('resize', applyDesktopTileScale);
+  }
+
   global.MjUI = {
     bindDom: bindDom, DOM: DOM, el: el,
     tileEl: tileEl, tilesHtml: tilesHtml, backEl: backEl,
@@ -600,6 +634,7 @@
     seatWind: function (seat, dealer) { return WIND[(seat - (dealer || 0) + 4) % 4]; },
     setTurnClock: setTurnClock, tickTurnClock: tickTurnClock, clearTurnClock: clearTurnClock,
     showLobby: showLobby, hideLobby: hideLobby, highlightRooms: highlightRooms,
+    MJ_TILE_CAL: MJ_TILE_CAL, applyDesktopTileScale: applyDesktopTileScale,
     G: G
   };
 

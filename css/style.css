@@ -1310,13 +1310,13 @@ body {
   border: 1px solid rgba(255, 233, 168, .55);
 }
 
-/* 副露小牌 */
+/* 副露小牌（桌面尺寸走变量；手机端由 .is-mobile 规则覆盖） */
 .mtile.mini {
-  width: 24px;
-  height: 33px;
+  width: var(--mj-mw, 24px);
+  height: var(--mj-mh, 33px);
   border-radius: 3px;
   box-shadow: none;
-  font-size: 10.5px;
+  font-size: calc(var(--mj-mw, 24px) * 0.46);
 }
 
 /* ---------------- 座位框 ---------------- */
@@ -1409,28 +1409,40 @@ body {
   animation: springIn 1.4s ease-out forwards;
 }
 
-/* ---------------- 牌河：四家 6×3 定格，围桌排布 ----------------
- * 对家/我家横排（6 列×3 行），左右两家竖排（3 列×6 行，牌横置）。
+/* ---------------- 牌河：四家 3×10 定格（全分辨率，用户定版） ----------------
+ * 对家/我家横排（10 列×3 行），左右两家竖排（3 列×10 行，牌横置）。
  * 朝向统一「牌头指桌心」：各家牌河读起来对他们是正的（对家牌对我倒置），
- * 牌河从各家身边向桌心生长。只显示最近 18 张（6×3），无堆叠无外溢。 */
+ * 牌河从各家身边向桌心生长。只显示最近 30 张（3×10），无堆叠无外溢。
+ * 桌面尺寸变量（用户定版标定法）：JS 按常见比例标定表写入 --mj-rw
+ * （河牌宽，40px 为 1.0 基准）；手牌=河牌×1.2、副露=河牌÷1.2，比例锁死。 */
+body:not(.is-mobile) {
+  --mj-rw: 40px;                                  /* 河牌宽（JS 标定覆盖） */
+  --mj-rh: calc(var(--mj-rw) * 1.35);             /* 河牌高 */
+  --mj-mw: calc(var(--mj-rw) / 1.2);              /* 副露牌宽 */
+  --mj-mh: calc(var(--mj-mw) * 1.35);             /* 副露牌高 */
+  --mj-hw: calc(var(--mj-rw) * 1.2);              /* 我方手牌牌宽 */
+  --mj-hh: calc(var(--mj-hw) * 1.35);             /* 我方手牌牌高 */
+  --mj-ew: calc(var(--mj-rw) * 0.7);              /* 复盘态他家亮牌牌宽（河牌×0.7） */
+  --mj-eh: calc(var(--mj-ew) * 1.35);             /* 复盘态他家亮牌牌高 */
+}
 .mj-river {
   position: absolute;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   align-content: flex-start;   /* 牌少时排与排收拢贴边，不摊行距（少牌/满牌行距恒定） */
-  width: 260px;          /* 横排：每行 6 张（40+4） */
-  height: 170px;         /* 3 行封顶 */
+  width: calc(var(--mj-rw) * 10 + 36px);   /* 横排：每行 10 张（rw+4） */
+  height: calc(var(--mj-rh) * 3 + 8px);    /* 3 行封顶 */
   z-index: 2;
 }
 .mj-river-0 { flex-flow: row wrap-reverse; }      /* 我家：第一排贴我，向桌心长 */
 .mj-river-1, .mj-river-3 {
-  width: 170px;          /* 竖排：3 列（横置牌 54+4） */
-  height: 260px;         /* 6 行（40+4） */
+  width: calc(var(--mj-rh) * 3 + 8px);   /* 竖排：3 列（横置牌 rh+4） */
+  height: calc(var(--mj-rw) * 10 + 36px);/* 10 行（rw+4） */
 }
 .mj-river-1 { flex-flow: column-reverse wrap-reverse; }  /* 右家：列贴右缘起向桌心，列内自下而上 */
 .mj-river-3 { flex-flow: column wrap; }                   /* 左家：列贴左缘起向桌心，列内自上而下 */
-.mj-river .mtile { width: 40px; height: 54px; font-size: 17px; opacity: .96; }
+.mj-river .mtile { width: var(--mj-rw); height: var(--mj-rh); font-size: calc(var(--mj-rw) * 0.42); opacity: .96; }
 .mj-river .mtile.last {
   box-shadow: 0 3px 0 #c6b896, 0 0 0 2px var(--gold), 0 6px 12px rgba(0, 0, 0, .5);
 }
@@ -1439,30 +1451,20 @@ body {
 .mj-river-1 .mtile { transform: rotate(-90deg); }
 .mj-river-2 .mtile { transform: rotate(180deg); }
 /* 竖排单元格：按横置后的占位排布 */
-.rv-cell { width: 54px; height: 40px; display: grid; place-items: center; }
+.rv-cell { width: var(--mj-rh); height: var(--mj-rw); display: grid; place-items: center; }
 
-/* 河位：对家贴顶（让开座位胶囊）、我家贴底、左右沿边垂直居中 */
+/* 河位：对家贴顶（让开座位胶囊，间隔 6px）、我家贴底（河→手牌 6px）、
+ * 左右沿边贴顶锚定（块顶对胶囊 6px，参考手机端块对齐） */
 .mj-river-2 { top: 72px; left: 50%; transform: translateX(-50%); }
-.mj-river-0 { bottom: 120px; left: 50%; transform: translateX(-50%); }
-.mj-river-1 { top: 50%; right: 12px; transform: translateY(-50%); }
-.mj-river-3 { top: 50%; left: 12px; transform: translateY(-50%); }
+.mj-river-0 { bottom: calc(var(--mj-hh) + 16px); left: 50%; transform: translateX(-50%); }
+.mj-river-1 { top: 72px; right: 12px; transform: none; }
+.mj-river-3 { top: 72px; left: 12px; transform: none; }
 
-/* ---- 桌面牌河扩容（视口 ≥700 高）：18→30 张 + 副露加大 ----
- * 横河 10 列（436px，我河右偏 2 列/对面河左偏 2 列，镜像 ±88px，
- * 各向自己右侧生长）；侧河 10 排（392px）上锚定 y 72（底让胶囊带，
- * 视口 ≥694 全绿）。副露 mini 26×36：侧家每列两幅自然成 2×2，
- * 我方横排两幅一行。矮视口（<700）自动回退上方 18 张现状。
- * 注意：本块必须位于上方河位规则之后，否则 top/transform 被覆盖。 */
-@media (min-height: 700px) {
-  body:not(.is-mobile) .mj-river { width: 436px; }
-  body:not(.is-mobile) .mj-river-1, body:not(.is-mobile) .mj-river-3 { width: 170px; }
-  body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
-  body:not(.is-mobile) .mj-river-0 { margin-left: 88px; }
-  body:not(.is-mobile) .mj-river-1, body:not(.is-mobile) .mj-river-3 { height: 436px; top: 72px; transform: none; }
-  .mtile.mini { width: 26px; height: 36px; font-size: 12px; }
-  body:not(.is-mobile) .mj-melds-2 { left: calc(50% + 142px); }
-  body:not(.is-mobile) .mj-melds-3 { left: 186px; }
-}
+/* 桌面 3×10 与副露尺寸已上收变量方案（见牌河段），不再分高低视口两套；
+ * 我河/对面河无副露时维持 ±88 镜像偏移现状，有副露时按「河+副露成组
+ * 左右居中」让位（见 mj-table.has-melds-* 规则，间距 6px，用户定版） */
+body:not(.is-mobile) .mj-river-0 { margin-left: 88px; }
+body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
 
 /* ---------------- 副露条：贴各家牌河末端，归属分明 ---------------- */
 .mj-melds-strip {
@@ -1485,10 +1487,18 @@ body {
 .mj-melds-strip .mtile.mini.claimed { --claimed: 90deg; }
 /* 左右两家的每组副露转成纵向一列（对标国内主流：侧家副露竖排） */
 .mj-melds-1 .mj-meld, .mj-melds-3 .mj-meld { flex-direction: column; }
-.mj-melds-2 { top: 72px; left: calc(50% + 138px); }
-.mj-melds-1 { top: 50%; right: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
-.mj-melds-3 { top: 50%; left: 190px; transform: translateY(-50%); flex-flow: column wrap; max-height: 260px; max-width: 100px; }
-.mj-melds-0 { bottom: 120px; right: calc(50% + 138px); max-width: 260px; }   /* 我方胶囊右侧、紧贴我河左缘（3px），随河居中锚定 */
+/* 我方：副露四排柱（每排一组，共四排，朝向保持现状）在河左 6px；
+ * 有副露时河右移 (柱宽+6)/2 成组左右居中（用户定版，见 has-melds 规则） */
+.mj-melds-2 { top: 72px; left: calc(50% + 5 * var(--mj-rw) - 2 * var(--mj-mw) + 19.5px); max-width: calc(var(--mj-mw) * 4 + 3px); }
+/* 两侧：2 竖条（每竖条 2 组）贴河视觉 6px（横置牌视觉盒比元素盒宽
+ * (mh-mw)/2，河侧偏移计入凸出，用户定版拓扑），纵向居中于侧河轴线；
+ * 行/列间隙 4px；行牌态链 = 河(12+3rh+8)+6，复盘态链另含亮牌列（见复盘块） */
+.mj-melds-1 { top: calc(72px + (var(--mj-rw) * 10 + 36px) / 2); right: calc(26px + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); transform: translateY(-50%); flex-flow: column wrap; gap: 4px 8px; max-height: calc(var(--mj-mh) * 8 + 14px); max-width: calc(var(--mj-mw) * 2 + 12px); }
+.mj-melds-3 { top: calc(72px + (var(--mj-rw) * 10 + 36px) / 2); left: calc(26px + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); transform: translateY(-50%); flex-flow: column wrap; gap: 4px 8px; max-height: calc(var(--mj-mh) * 8 + 14px); max-width: calc(var(--mj-mw) * 2 + 12px); }
+.mj-melds-0 { bottom: calc(var(--mj-hh) + 16px); right: calc(50% + 5 * var(--mj-rw) - 2 * var(--mj-mw) + 19.5px); flex-flow: column; max-width: calc(var(--mj-mw) * 4 + 3px); max-height: none; }
+/* 河+副露成组左右居中（桌面，间距 6px）：柱宽 = 4mw+3，让位 = (柱宽+6)/2 */
+.mj-table.has-melds-0 .mj-river-0 { margin-left: calc(var(--mj-mw) * 2 + 4.5px); }
+.mj-table.has-melds-2 .mj-river-2 { margin-left: calc(-1 * (var(--mj-mw) * 2 + 4.5px)); }
 
 /* 牌墙余数 / 巡目：桌心一行小字（主流惯例：中央信息克制） */
 .mj-wall-info {
@@ -1533,27 +1543,20 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  min-height: 86px;
+  min-height: calc(var(--mj-hh, 66px) + 20px);
   padding-top: 16px;
   margin-right: 84px;   /* 给右下角操作按钮竖条留位 */
 }
 .mj-hand .mtile {
-  width: 48px;
-  height: 66px;
+  width: var(--mj-hw, 48px);
+  height: var(--mj-hh, 66px);
   margin-left: -3px;    /* 轻微叠放，14 张也能放下 */
-  font-size: 22px;
+  font-size: calc(var(--mj-hw, 48px) * 0.46);
   cursor: pointer;
   transition: transform .13s ease-out, box-shadow .13s;
   touch-action: manipulation;
 }
-/* 宽屏桌面：麻将手牌放大一档 */
-@media (min-width: 1150px) {
-  .mj-hand .mtile {
-    width: 54px;
-    height: 74px;
-    font-size: 25px;
-  }
-}
+/* 宽屏桌面放大档已并入变量标定（手牌=河牌×1.2），不再分档 */
 .mj-hand .mtile:first-child { margin-left: 0; }
 .mj-hand .mtile:hover { transform: translateY(-8px); }
 .mj-hand .mtile.selected {
@@ -1668,29 +1671,40 @@ body {
   margin-left: -4px;
   font-size: 27px;
 }
-/* 牌河缩小一档（相对桌面）：横排 6 列 ×207px，竖排 3 列 ×138px，围桌几何不变 */
-.is-mobile .mj-river { width: 207px; height: 138px; gap: 3px; }
+/* 牌河两档恒 30 张 3×10（用户定版，不删减行列数）：横河 10 列×347、侧河 10 排×347 */
+.is-mobile .mj-river { width: 347px; height: 138px; gap: 3px; }
 .is-mobile .mj-river .mtile { width: 32px; height: 44px; font-size: 14px; }
-.is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 138px; height: 207px; }
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 138px; height: 347px; }
 .is-mobile .rv-cell { width: 44px; height: 32px; }
 .is-mobile .mj-river-2 { top: 70px; left: 50%; transform: translateX(-50%); }
-/* 侧河与其副露条同轴（top 43%，末行横置牌外溢量计入），河贴边、副露紧随其内侧 */
-.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 43%; transform: translateY(-50%); }
+/* 侧河以牌桌区域上下居中（top 50%，不受顶栏影响），河贴边、副露紧随其内侧。
+ * 侧副露横牌旋转后视觉盒外溢 5px：158 锚点 = 牌缘 150 + 3px 间隙 + 5px 溢出，
+ * 视觉间隙恰 3px（用户定版） */
+.is-mobile .mj-river-1, .is-mobile .mj-river-3 { top: 50%; transform: translateY(-50%); }
 /* 侧河对称贴边（右河的 104px 是旧竖排按钮时代遗留，2×2 按钮后不再需要） */
 .is-mobile .mj-river-1 { right: 12px; }
 .is-mobile .mj-river-0 { bottom: 100px; }
 .is-mobile .mj-melds-strip { max-width: 150px; }
-/* 对家副露跟在河右侧：单列窄条（限宽 84，一组一行）；碰的横牌标来源
- * 会向左溢出 5px，间距已计入 */
-.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 112px); max-width: 84px; }
-/* 侧家副露：限高 200（任何副露组合下容器高 ≤156，底部不进我方副露带）、
- * 限宽 132（极端 4 列也包住，右家条右锚定自动向左生长，不横溢撞河）；
- * 间隙以「满河时最近牌面」为基准收到安全极限（横牌溢出 5px 已计入） */
-.is-mobile .mj-melds-1 { top: 43%; right: 158px; transform: translateY(-50%); max-height: 96px; max-width: 132px; }
-.is-mobile .mj-melds-3 { top: 43%; left: 158px; transform: translateY(-50%); max-height: 96px; max-width: 132px; }
-/* 我的副露随居中牌河锚定（牌河半宽 103.5 + 3px 间隙），任何设计宽度下
- * 恒定间距；max-width 176 恰好一排两幅，三幅起自动折两排 */
-.is-mobile .mj-melds-0 { bottom: 104px; right: calc(50% + 107px); left: auto; max-width: 176px; }
+/* 对家：河+副露（河右 3px）成组左右居中，M2=112（容杠四张一行，与宽档
+ * 统一；84 会溢出 23px 侵右家副露带）→ 有副露时河左移 57.5 */
+.is-mobile .mj-melds-2 { top: 70px; left: calc(50% + 119px); max-width: 112px; }
+/* 侧家副露（用户定版排布）：每竖条装 2 组副露（上下叠），向桌心只排 2 条
+ * —— 横向占地 2×26+8=60（原 4 条 112），纵向 ~300 用满侧河旁上下空间，
+ * 不再挤压我方/对家的河与副露；3px 贴河（158 = 牌缘 150 + 3 + 溢出 5） */
+.is-mobile .mj-melds-1 { top: 50%; right: 158px; transform: translateY(-50%); max-height: 300px; max-width: 64px; }
+.is-mobile .mj-melds-3 { top: 50%; left: 158px; transform: translateY(-50%); max-height: 300px; max-width: 64px; }
+/* 我方：副露竖排块（宽 107）在河左 3px（右缘 50%+121.5）；有副露时河右移
+ * (107+3)/2=55，二者成组左右居中（用户定版）。has-melds 类挂在 .mj-table 上，
+ * 与 body 的 is-mobile 不同元素，选择器须分开写。 */
+.is-mobile .mj-melds-0 {
+  flex-flow: column;
+  bottom: 100px;
+  right: calc(50% + 121.5px);
+  left: auto;
+  max-width: 112px;
+}
+.is-mobile .mj-table.has-melds-0 .mj-river-0 { margin-left: 55px; }
+.is-mobile .mj-table.has-melds-2 .mj-river-2 { margin-left: -57.5px; }
 /* 我方胶囊下移到底边（稍高 12px），手牌右移让位 */
 .is-mobile .mj-seat-0 { bottom: 12px; }
 /* 侧家座位胶囊放开长度：长名字完整显示（横向空间充足） */
@@ -1711,9 +1725,9 @@ body {
   z-index: 3;
 }
 .remain-tiles .mtile {
-  width: 30px;
-  height: 42px;
-  font-size: 14px;
+  width: var(--mj-ew, 30px);
+  height: var(--mj-eh, 42px);
+  font-size: calc(var(--mj-ew, 30px) * 0.35);
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, .35);
   transform: rotate(var(--rot, 0deg));
@@ -1731,23 +1745,29 @@ body {
 .remain-mj-1 { right: 10px; top: calc(50% - 233px); }
 .remain-mj-3 { left: 10px; top: calc(50% - 233px); }
 
-/* 牌河让位：向桌心移动，给边缘亮牌腾位；对家副露随河下移 */
-.mj-river-2.reveal-shift { top: 120px; }
-.mj-river-1.reveal-shift { right: 58px; }
-.mj-river-3.reveal-shift { left: 58px; }
-.mj-melds-2.reveal-shift { top: 192px; }
-/* 两侧副露条随牌河一起让位，避免被位移后的牌河压住 */
-.mj-melds-1.reveal-shift { right: 236px; }
-.mj-melds-3.reveal-shift { left: 236px; }
+/* 牌河让位（复盘态，桌面，间距 6px 用户定版）：亮牌排（0.7 河牌，高 eh）
+ * 贴胶囊 6px → 河 = 72+eh+6；对家副露与河同轴顶齐。侧河贴边 6px 链（视觉口径）：
+ * 亮牌列元素宽 ew、横置视觉宽 eh，中心面向凸出 (eh-ew)/2 → 河 right = 10+ew/2+eh/2+6；
+ * 副露自身横牌凸出 (mh-mw)/2 同理计入 → 河→副露视觉亦 6px */
+.mj-river-2.reveal-shift { top: calc(78px + var(--mj-eh)); }
+.mj-river-1.reveal-shift { right: calc(16px + (var(--mj-ew) + var(--mj-eh)) / 2); }
+.mj-river-3.reveal-shift { left: calc(16px + (var(--mj-ew) + var(--mj-eh)) / 2); }
+.mj-melds-2.reveal-shift { top: calc(78px + var(--mj-eh)); }
+.reveal-mode .remain-mj-2 { top: 72px; }
+.reveal-mode .remain-mj-1, .reveal-mode .remain-mj-3 { top: 72px; }
+/* 两侧副露条随牌河一起让位成 6px 链（亮牌列→河→副露，视觉宽口径）；
+ * 纵向沿用基础档的侧河轴线居中（top 已在基础档按轴线计算）。
+ * 桌面 min-height:700 媒体查询已废弃（变量方案统一全分辨率），
+ * 此处 body:not(.is-mobile).reveal-mode 复合选择器保证压过任何残余定位 */
+body:not(.is-mobile).reveal-mode .mj-melds-1 { right: calc(30px + (var(--mj-ew) + var(--mj-eh)) / 2 + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); }
+body:not(.is-mobile).reveal-mode .mj-melds-3 { left: calc(30px + (var(--mj-eh) + var(--mj-ew)) / 2 + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); }
 
-/* 复盘态：我方胶囊（含庄标）全局让位；桌面亮牌列纵贯我方区域，
- * 我方副露条（左缘 x 14 起）会与左列相碰，一并隐藏。
- * 手机端亮牌列贴左右边缘、不经过我方副露带，副露保留不动。
- * （reveal-mode 类挂在 body 上，须用复合选择器而非后代）
- * 复盘时操作按钮是死按钮，一并隐藏给亮牌列让出全高。 */
+/* 复盘态：我方胶囊（含庄标）全局让位；复盘时操作按钮是死按钮，一并隐藏。
+ * 副露全部保留显示（桌面我方副露维持播放态锚位——我河左缘；侧家副露
+ * 的 reveal-shift 让位规则须压过 min-height:700 媒体查询，见桌面复盘块；
+ * 手机端两侧副露让位到河下方外侧角，见手机复盘块）。 */
 .reveal-mode .mj-seat-0 { display: none; }
 .reveal-mode .mj-actions { visibility: hidden; }
-body:not(.is-mobile).reveal-mode .mj-melds-0 { display: none; }
 
 /* 触及档（设计宽 ≤1133）：14 张手牌可用宽恰足，去我方头像压缩左占位 */
 @media (max-aspect-ratio: 2.024/1) {
@@ -1770,35 +1790,28 @@ body:not(.is-mobile).reveal-mode .mj-melds-0 { display: none; }
  * 我方竖排 4 行贴我河左缘。 */
 @media (min-aspect-ratio: 2/1) {
   .is-mobile .mj-river { width: 347px; }
-  .is-mobile .mj-river-2 { margin-left: -70px; }
-  .is-mobile .mj-river-0 { margin-left: 70px; }
-  .is-mobile .mj-river-1, .is-mobile .mj-river-3 { height: 318px; gap: 2px; top: 72px; transform: none; }
+  /* 侧河 3×10：宽度显式收回 138（防被上方 .mj-river 347 连带），
+   * 并以牌桌区域上下居中（top 50%，用户定版）。
+   * 成组居中（对家 M2=112、我方 M0 竖排块 107）已上收基础档，两档共用 */
+  .is-mobile .mj-river-1, .is-mobile .mj-river-3 { width: 138px; height: 318px; gap: 2px; top: 50%; transform: translateY(-50%); }
   .is-mobile .rv-cell { height: 30px; }
   .is-mobile .mj-river-1 .mtile, .is-mobile .mj-river-3 .mtile { width: 30px; height: 36px; }
-  .is-mobile .mj-melds-2 { left: calc(50% + 142px); max-width: 112px; }
-  /* 两侧副露：旋转与生长规则同现状（横置牌竖列），仅限高改为每列两幅
-   * （4 组 = 两列两行，即 2×2） */
-  .is-mobile .mj-melds-1, .is-mobile .mj-melds-3 { max-height: 176px; }
-  .is-mobile .mj-melds-0 {
-    flex-flow: column;
-    max-width: 112px;
-    max-height: none;
-    bottom: auto;
-    right: calc(50% + 141px);
-    left: auto;
-    top: calc(50% + 70px);
-    transform: translateY(-50%);
-  }
+  /* 两侧副露（用户定版排布，同基础档）：每竖条 2 组、向桌心 2 条 */
+  .is-mobile .mj-melds-1, .is-mobile .mj-melds-3 { max-height: 300px; }
 }
 
 .is-mobile .remain-tiles .mtile { width: 26px; height: 36px; font-size: 12px; }
-/* 手机复盘态：两侧副露块隐藏（亮牌已上桌，避免与让位牌河/竖条挤位） */
-.is-mobile.reveal-mode .mj-melds-1, .is-mobile.reveal-mode .mj-melds-3 { display: none; }
-.is-mobile .remain-mj-2 { top: 46px; }
-.is-mobile .remain-mj-1, .is-mobile .remain-mj-3 { top: 76px; }
-/* 复盘让位量：河向桌心挪后（两侧副露块复盘已隐藏，无需让位规则） */
-.is-mobile .mj-river-2.reveal-shift { top: 100px; }
-.is-mobile .mj-melds-2.reveal-shift { top: 96px; }
+/* 手机复盘态各家块独立定标（用户定版）：块顶（该家最顶牌面）对各自胶囊 3px。
+ * 对家：亮牌排 36.5，实测间隔 2.9 ✓。两侧：块顶原 66.5、胶囊底 36.5，
+ * 间隔 30 → 两侧块再统一上移 27.5（亮牌列 39、侧河/侧副露 50%-37） */
+.is-mobile.reveal-mode .mj-melds-1 { right: 204px; top: calc(50% - 37px); max-height: 304px; max-width: 56px; gap: 3px 4px; }
+.is-mobile.reveal-mode .mj-melds-3 { left: 204px; top: calc(50% - 37px); max-height: 304px; max-width: 56px; gap: 3px 4px; }
+.is-mobile .remain-mj-2 { top: 36.5px; }
+.is-mobile .remain-mj-1, .is-mobile .remain-mj-3 { top: 39px; }
+.is-mobile.reveal-mode .mj-river-1, .is-mobile.reveal-mode .mj-river-3 { top: calc(50% - 37px); }
+/* 复盘让位量（随统一上移 -9.5）：对家河 100→90.5、对家副露 96→86.5 */
+.is-mobile .mj-river-2.reveal-shift { top: 90.5px; }
+.is-mobile .mj-melds-2.reveal-shift { top: 86.5px; }
 /* 复盘精简对方胶囊：只留名字（+庄标），压低顶带高度 */
 .is-mobile.reveal-mode .mj-seat-1, .is-mobile.reveal-mode .mj-seat-2, .is-mobile.reveal-mode .mj-seat-3 { padding: 3px 8px; }
 .is-mobile.reveal-mode .mj-seat-1 .avatar, .is-mobile.reveal-mode .mj-seat-2 .avatar, .is-mobile.reveal-mode .mj-seat-3 .avatar,
