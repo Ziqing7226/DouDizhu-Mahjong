@@ -1665,11 +1665,13 @@ body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
 .is-mobile .bottom-cards .card { transform: scale(.8); transform-origin: top center; }
 
 /* ---- 麻将：牌与按钮放大（设计稿层面） ---- */
+/* 手机端手牌（用户定版）：牌距 0 不堆叠——14 张等宽恰好占满手牌区，
+ * 宽度随视口自适应（负边距堆叠已废除） */
 .is-mobile .mj-hand { min-height: 104px; margin-left: 244px; margin-right: 170px; }
 .is-mobile .mj-hand .mtile {
-  width: 58px;
+  width: 7.14%;
   height: 80px;
-  margin-left: -4px;
+  margin-left: 0;
   font-size: 27px;
 }
 /* 牌河两档恒 30 张 3×10（用户定版，不删减行列数）：横河 10 列×347、侧河 10 排×347 */
@@ -1778,7 +1780,6 @@ body:not(.is-mobile).reveal-mode .mj-melds-3 { left: calc(30px + (var(--mj-eh) +
 }
 /* 窄宽高比机型（设计宽 <1092）：手牌牌面加密一档，避免右溢碰到按钮带 */
 @media (max-aspect-ratio: 2/1) {
-  .is-mobile .mj-hand .mtile { margin-left: -13px; }
   .is-mobile .mj-hand { margin-right: 156px; }
 }
 
