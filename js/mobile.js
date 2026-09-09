@@ -84,11 +84,14 @@
     body.classList.toggle('portrait', portrait && touchMobile);
     if (portrait && touchMobile) { reset(); return; }
 
-    if (vw >= DESIGN_W) { reset(); return; }   // 大屏横铺足够，无需缩放
+    // 大屏非触屏横铺足够，无需缩放；触屏设备（iPad 横屏等）即使 vw≥1000
+    // 也继续等比缩放——窄档（AR<2）拓扑链需要 1091 设计宽（760×390 实测
+    // 基准，高度约束时系数不变），基准从 1000 放宽到 1091
+    if (vw >= DESIGN_W && !touchMobile) { reset(); return; }
 
-    // 同时满足宽度（1000 设计稿）与高度（560 手机内容最小高），
+    // 同时满足宽度（1091 窄档设计宽）与高度（560 手机内容最小高），
     // 取更小的缩放，保证纵向不被裁切；多出的宽度转化为更宽的牌桌
-    var scale = Math.min(vw / DESIGN_W, vh / DESIGN_H_M);
+    var scale = Math.min(vw / 1091, vh / DESIGN_H_M);
     var appW = Math.round(vw / scale);
     var appH = Math.round(vh / scale);
     app.style.width = appW + 'px';

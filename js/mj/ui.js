@@ -599,6 +599,9 @@
   function applyDesktopTileScale() {
     if (typeof document === 'undefined' || !document.body || !document.body.classList) return;
     if (document.body.classList.contains('is-mobile')) return;
+    // 麻将视图隐藏（如斗地主界面）时矩形不可测，跳过避免写入垃圾内联变量
+    var mjView = document.getElementById('mjView');
+    if (mjView && mjView.offsetHeight === 0) return;
     var vw = global.innerWidth, vh = global.innerHeight;
     if (!vw || !vh) return;
     var ar = vw / vh, best = MJ_TILE_CAL[0], bd = Infinity;
@@ -623,6 +626,9 @@
   function layoutSideBlocks() {
     if (typeof document === 'undefined' || !document.body || !document.body.classList) return;
     if (document.body.classList.contains('is-mobile')) return;
+    // 麻将视图隐藏时矩形不可测，跳过
+    var mjView = document.getElementById('mjView');
+    if (mjView && mjView.offsetHeight === 0) return;
     var table = document.getElementById('mjTable');
     if (!table || !document.getElementById('mjHand')) return;
     // DOM 桩环境（无 getBoundingClientRect）下静默跳过

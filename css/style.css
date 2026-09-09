@@ -1802,6 +1802,13 @@ body:not(.is-mobile).reveal-mode .mj-melds-3 { left: calc(30px + (var(--mj-eh) +
   .is-mobile .mj-melds-1, .is-mobile .mj-melds-3 { max-height: 300px; }
 }
 
+/* 手机端亮牌牌面 26×36；--mj-ew/eh 供复盘让位公式使用（与桌面 --mj-rw 系
+ * 解耦——手机端 body:not(.is-mobile) 的变量块不生效，缺定义会使
+ * .reveal-shift 的 calc 声明失效、右河复盘回退行牌位置） */
+.is-mobile {
+  --mj-ew: 26px;
+  --mj-eh: 36px;
+}
 .is-mobile .remain-tiles .mtile { width: 26px; height: 36px; font-size: 12px; }
 /* 手机复盘态各家块独立定标（用户定版）：块顶（该家最顶牌面）对各自胶囊 3px。
  * 对家：亮牌排 36.5，实测间隔 2.9 ✓。两侧：块顶原 66.5、胶囊底 36.5，
