@@ -85,7 +85,11 @@
     safeBonus: false,
     escapeBlock: false,
     mustBlock: false,
-    holdsLead: false
+    holdsLead: false,
+    // 敌人报单/报双时不送可被压的散单张（用户实测：AI 手握三带一+顺子的必赢
+    // 好牌，却领出散单张被对手最后一张压掉反杀 —— 单张敌人永远压不起多牌型，
+    // 先出多牌型必保先手。escapeBlock 只加「惩罚」且会误伤，这里是硬防护）
+    feedGuard: true
   };
 
   /* ---------------- 难度参数 ---------------- */
@@ -1079,7 +1083,16 @@
       if (uc) {
         // 谁是对手压不起的，先打谁 —— 打出去还能接着出
         var safe0 = !unseenHasBeat(uc, h0), safe1 = !unseenHasBeat(uc, h1);
-        if (safe0 !== safe1) first = safe0 ? 0 : 1;
+        // 敌人报单：可被压的散单张领出去就是直接送掉整局（单张敌人永远压不起
+        // 多牌型），先出非单张的那一手，哪怕它会被第三家压住也只是丢先手
+        var enemyOne = false;
+        for (var e1 = 0; e1 < ctx.counts.length; e1++) {
+          if (isEnemySeat(ctx, e1) && ctx.counts[e1] === 1) { enemyOne = true; break; }
+        }
+        var risky0 = FEAT.feedGuard && enemyOne && h0.type === CT.SINGLE && !safe0;
+        var risky1 = FEAT.feedGuard && enemyOne && h1.type === CT.SINGLE && !safe1;
+        if (risky0 !== risky1) first = risky0 ? 1 : 0;
+        else if (safe0 !== safe1) first = safe0 ? 0 : 1;
         else if (bomb0 !== bomb1) first = (oppMin <= 3) ? (bomb0 ? 0 : 1) : (bomb0 ? 1 : 0);
         else first = (h0.main >= h1.main) ? 0 : 1;
       } else if (bomb0 !== bomb1) {
@@ -1127,6 +1140,20 @@
       if (!uc && cd.combo.type === CT.SINGLE && cd.combo.main <= 9) {
         for (var o2 = 0; o2 < ctx.counts.length; o2++) {
           if (o2 !== ctx.seat && ctx.counts[o2] === 1) score += 25;
+        }
+      }
+
+      // 记牌版「别送胜」（用户实测修复）：敌人报单时，任何可能被它压住的单张
+      // 领出去都是直接送掉整局 —— 单张敌人永远压不起多牌型，此时应先出
+      // 三带一/顺子等多牌型保住先手。报双的敌人吃下单张后还要再走一张，轻罚。
+      // safe（没有任何未现之牌能压）的单张不怕报单敌人，不罚。
+      // 罚分随点数递减：手牌只剩危险单张时，先出最大的那张（与两手分支一致）。
+      if (uc && FEAT.feedGuard && cd.combo.type === CT.SINGLE && !safe) {
+        for (var o3 = 0; o3 < ctx.counts.length; o3++) {
+          if (!isEnemySeat(ctx, o3)) continue;
+          var eLeft = ctx.counts[o3];
+          if (eLeft === 1) score += 130 - cd.combo.main;
+          else if (eLeft === 2) score += 35 - cd.combo.main;
         }
       }
 
