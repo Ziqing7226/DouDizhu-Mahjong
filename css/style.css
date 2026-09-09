@@ -1773,6 +1773,55 @@ body:not(.is-mobile).reveal-mode .mj-melds-3 { left: calc(30px + (var(--mj-eh) +
 .reveal-mode .mj-seat-0 { display: none; }
 .reveal-mode .mj-actions { visibility: hidden; }
 
+/* 复盘态手牌区黄色荧光边框（用户定版：边框紧贴牌面边缘）。
+ * 全部用不占布局的手段画框，不扰动已定标的亮牌/让位坐标：
+ *  - 对家横排（牌倒置无凸出，盒即牌面边缘）：outline 贴盒 2px；
+ *  - 两侧竖排：牌横置后视觉宽凸出盒 (eh-ew)/2、视觉高缩进同量，
+ *    outline 无法沿视觉边缘非对称内外补偿，改用 ::before 画贴牌面矩形；
+ *  - 我方手牌：容器原本通栏 + min-height 留白，框离牌面太远，
+ *    复盘态收拢为 fit-content 居中窄盒（layoutSideBlocks 只把它当
+ *    「不交叠约束」，收窄后约束自然解除，侧块仍居中不受扰动）。 */
+.reveal-mode .remain-mj-2 {
+  border-radius: 8px;
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px rgba(247, 201, 72, .5), 0 0 22px rgba(247, 201, 72, .22);
+}
+/* 我方手牌框收拢到牌排本身（容器原本通栏 + min-height 留白，框离牌面太远）。
+ * 仅桌面：手牌牌宽是固定像素，fit-content 恰好收拢到牌排；
+ * 手机端牌宽是容器百分比 7.14%（14 张等宽占满手牌区），fit-content 会让
+ * 百分比失去基准、牌面压扁变形——保持通栏（牌距 0 本就贴满），只收垂直留白 */
+body.reveal-mode .mj-hand {
+  border-radius: 8px;
+  outline: 2px solid var(--gold);
+  outline-offset: 0;
+  box-shadow: 0 0 10px rgba(247, 201, 72, .5), 0 0 22px rgba(247, 201, 72, .22);
+}
+/* 我方手牌框收拢到牌排本身（容器原本通栏 + min-height 留白，框离牌面太远）。
+ * 仅桌面：手牌牌宽是固定像素，fit-content 恰好收拢到牌排；
+ * 手机端牌宽是容器百分比 7.14%（14 张等宽占满手牌区），fit-content 会让
+ * 百分比失去基准、牌面压扁变形——保持通栏（牌距 0 本就贴满），只收垂直留白 */
+body.reveal-mode:not(.is-mobile) .mj-hand {
+  width: fit-content;
+  min-height: 0;
+  padding: 2px;
+  margin: 0 auto;
+}
+body.is-mobile.reveal-mode .mj-hand {
+  min-height: 0;
+  padding: 2px 0;
+}
+.reveal-mode .remain-mj-1::before,
+.reveal-mode .remain-mj-3::before {
+  content: "";
+  position: absolute;
+  inset: 4px -8px;   /* 纵向贴牌面留 2px；横向跨过横置牌 6px 凸出再留 2px */
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(247, 201, 72, .5), 0 0 22px rgba(247, 201, 72, .22);
+  pointer-events: none;
+}
+
 /* 触及档（设计宽 ≤1133）：14 张手牌可用宽恰足，去我方头像压缩左占位 */
 @media (max-aspect-ratio: 2.024/1) {
   .is-mobile .mj-seat-0 .avatar { display: none; }

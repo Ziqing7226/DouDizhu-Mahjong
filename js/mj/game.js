@@ -957,6 +957,9 @@
       '</div>';
     showSettle();
     renderAll();
+    // 点炮/抢杠的胡牌牌已并入手牌（上方 push），但 renderAll 不含手牌区，
+    // 不重绘会让这张牌在复盘牌桌上消失（自摸时牌早已在手牌区渲染，无此问题）
+    if (winnerSeat === 0) renderHand();
   }
 
   /** 结算面板展示（首见与「复盘呼出」共用；内容取自 G.settleHtml 快照，不重复计分） */
