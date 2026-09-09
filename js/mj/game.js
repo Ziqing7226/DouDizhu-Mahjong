@@ -219,7 +219,7 @@
     UI.closeFloat();
     UI.closeDialog();
     MjUI.clearBubbles();
-    setActions({ discard: false, hint: false, hu: false, gang: false });
+    setActions({ hint: false, gang: false });
     MjUI.highlightRooms(G.difficulty);
     MjUI.showLobby();
     if (G.players.length === 4) renderAll();
@@ -241,7 +241,7 @@
     MjUI.hideLobby();
     UI.closeFloat();
     MjUI.clearBubbles();
-    setActions({ discard: false, hint: false, hu: false, gang: false });
+    setActions({ hint: false, gang: false });
   }
 
   /* ================= 开局 ================= */
@@ -467,9 +467,7 @@
     G.selected = null;
     renderHand();
     setActions({
-      discard: false,
       hint: G.difficulty !== 'master',
-      hu: chk.win,
       gang: chk.gangIdx >= 0 || chk.jiagangIdx >= 0
     });
     Sound.play('turn');
@@ -479,19 +477,17 @@
 
   function setActions(cfg) {
     MjUI.setActions({
-      discard: cfg.discard,
       hint: cfg.hint,
-      hu: cfg.hu,
       gang: cfg.gang
     });
   }
 
-  /** 当前我方手牌的胡/杠自查（选中牌、按提示后刷新按钮时用） */
+  /** 当前我方手牌的杠自查（选中牌、按提示后刷新按钮时用） */
   function myCheck() {
     return AI.selfCheck(selfCheckCtx(P(0)));
   }
 
-  /** 胡/杠按钮是否应点亮 */
+  /** 杠按钮是否应点亮 */
   function gangable(chk) {
     return chk.gangIdx >= 0 || chk.jiagangIdx >= 0;
   }
@@ -508,12 +504,10 @@
     G.selected = tile;
     Sound.play('select');
     renderHand();
-    // 选牌不应关掉胡/杠机会（否则误触一张牌就错过自摸）
+    // 选牌不应关掉杠机会（否则误触一张牌就错过杠）
     var chk = myCheck();
     setActions({
-      discard: true,
       hint: G.difficulty !== 'master',
-      hu: chk.win,
       gang: gangable(chk)
     });
   }
@@ -530,24 +524,11 @@
     renderHand();
     var chk = myCheck();
     setActions({
-      discard: true,
       hint: true,
-      hu: chk.win,
       gang: gangable(chk)
     });
     UI.toast('提示：打 ' + Tiles.labelOf(idx));
     Sound.play('select');
-  }
-
-  function tryDiscard() {
-    if (!canDiscardNow()) return;
-    if (!G.selected) { UI.toast('请先选一张牌'); return; }
-    var t = G.selected;
-    G.selected = null;
-    // 注意：这里刻意不清计时器 —— 与「双击打牌」路径保持一致。
-    // 计时器继续走完本回合预算，并驱动后续吃/碰/杠浮层的「超时自动过」；
-    // 若在此清掉，按钮路径打出的牌会让争抢浮层失去超时（挂机即卡死）。
-    doDiscard(0, t);
   }
 
   /* ---------- 打牌 ---------- */
@@ -887,15 +868,6 @@
     });
   }
 
-  function tryHu() {
-    if (!canDiscardNow()) return;
-    var counts = Tiles.countsOf(P(0).hand);
-    if (!Rules.isWin(counts, meldBudget(P(0)))) { UI.toast('还没有胡牌'); return; }
-    clearTimer();
-    var last = P(0).hand[P(0).hand.length - 1];
-    doWin(0, { selfDraw: true, tile: last });
-  }
-
   /* ================= 胡牌结算 ================= */
 
   function doWin(winnerSeat, opts) {
@@ -1076,7 +1048,7 @@
       '<p>得分 = 底分（100）× 总番数；自摸三家各付，点炮由点炮者付；庄家参与结算时翻倍。</p>' +
       '</div>' +
       '<div class="sec"><h4>操作</h4>' +
-      '<p>点击手牌选中，再点一次直接打出；或选中后按「打出」。</p>' +
+      '<p>点击手牌选中，再点一次直接打出。</p>' +
       '<p>「提示」按高手思路推荐打牌（大师模式隐藏）。</p>' +
       '<p>回合倒计时 ' + TURN_SECONDS + ' 秒，超时自动打推荐牌 / 自动过。</p>' +
       '<p><b>自动胡</b>：自摸 / 接炮 / 抢杠能胡时自动和牌，无需按键。</p>' +
@@ -1143,9 +1115,7 @@
     var prefs = Store.getPrefs();
     G.difficulty = prefs.mjDifficulty || 'hard';
 
-    MjUI.el('mjBtnDiscard').addEventListener('click', tryDiscard);
     MjUI.el('mjBtnHint').addEventListener('click', doHint);
-    MjUI.el('mjBtnHu').addEventListener('click', tryHu);
     MjUI.el('mjBtnGang').addEventListener('click', tryGang);
 
     var roomBtns = MjUI.el('mjLobby').querySelectorAll('button');

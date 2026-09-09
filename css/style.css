@@ -1527,7 +1527,7 @@ body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
   z-index: 6;
 }
 
-/* 操作按钮：牌桌右下角竖排窄条，避免与宽手牌重叠 */
+/* 操作按钮：牌桌右下角窄条（[提示][杠] 一行两键，杠固定右下角） */
 .mj-actions {
   position: absolute;
   right: 8px;
@@ -1546,7 +1546,7 @@ body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
   align-items: flex-end;
   min-height: calc(var(--mj-hh, 66px) + 20px);
   padding-top: 16px;
-  margin-right: 84px;   /* 给右下角操作按钮竖条留位 */
+  margin-right: 84px;   /* 给右下角操作按钮条留位 */
 }
 .mj-hand .mtile {
   width: var(--mj-hw, 48px);

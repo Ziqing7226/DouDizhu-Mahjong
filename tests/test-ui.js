@@ -648,10 +648,11 @@ console.log('\n=== 麻将冒烟 ===');
     if (G2.phase === 'playing' && G2.turn === 0 && !G2.busy && my.hand.length % 3 === 2) {
       const hand = registry.mjHand;
       const n = hand.children.length;
+      // 点两次最后一张：第一次选中，第二次直接打出（「打出」按钮已移除）
       if (n > 0 && hand.children[n - 1]._h && hand.children[n - 1]._h.click) {
         hand.children[n - 1]._h.click({});
-        const disc = registry.mjBtnDiscard;
-        if (!disc.disabled && disc._h && disc._h.click) { disc._h.click({}); continue; }
+        hand.children[n - 1]._h.click({});
+        continue;
       }
     }
     const layer = registry.floatLayer;

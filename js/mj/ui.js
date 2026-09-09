@@ -24,7 +24,7 @@
   function bindDom() {
     ['mjView', 'mjTable', 'mjHand', 'mjWallInfo', 'mjInfoList', 'mjScoreList', 'mjLogList',
       'mjCounterGrid', 'mjLobby',
-      'mjBtnDiscard', 'mjBtnHint', 'mjBtnHu', 'mjBtnGang'
+      'mjBtnHint', 'mjBtnGang'
     ].forEach(function (id) { DOM[id] = el(id); });
     DOM.boxes = [el('mjBox-0'), el('mjBox-1'), el('mjBox-2'), el('mjBox-3')];
     DOM.rivers = [el('mjRiver-0'), el('mjRiver-1'), el('mjRiver-2'), el('mjRiver-3')];
@@ -552,10 +552,7 @@
   /* ---------------- 操作按钮 ---------------- */
 
   function setActions(cfg) {
-    var map = {
-      mjBtnDiscard: cfg.discard, mjBtnHint: cfg.hint,
-      mjBtnHu: cfg.hu, mjBtnGang: cfg.gang
-    };
+    var map = { mjBtnHint: cfg.hint, mjBtnGang: cfg.gang };
     Object.keys(map).forEach(function (id) {
       var b = DOM[id];
       if (!b) return;
@@ -565,8 +562,7 @@
 
   /** 大师档隐藏提示按钮 */
   function setHintVisible(visible) {
-    // visibility 而非 display：大师场隐藏提示时保留网格占位，
-    // 胡键仍固定右下角（[空][杠] / [打出][胡]）
+    // visibility 而非 display：大师场隐藏提示时保留网格占位，杠键仍固定右下角
     DOM.mjBtnHint.style.visibility = visible ? '' : 'hidden';
   }
 
