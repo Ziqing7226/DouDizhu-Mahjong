@@ -308,6 +308,26 @@
     return unseenHasBeat(uc, combo);
   }
 
+  /**
+   * 敌方短牌（剩 ≤limit 张）里是否存在压得过 combo 的牌。
+   * 完全信息逐家精确判定；记牌档用合并估计（保守：只要未现之牌里有能压的，
+   * 就按「短敌压得住」处理）。
+   * 依据引擎规则「打出最后一手立即获胜」：短敌压住任何一手后剩牌已少，
+   * 下一次领出（很可能就是最后一手）直接判胜 —— 所以短敌压得起的领出都危险。
+   */
+  function shortEnemyCanBeat(ctx, uc, combo, limit) {
+    if (!combo) return false;
+    var exact = ctx.oppCountBySeat;
+    for (var s = 0; s < 3; s++) {
+      if (s === ctx.seat || !isEnemySeat(ctx, s)) continue;
+      if (ctx.counts[s] > limit) continue;
+      if (exact) {
+        if (exact[s] && unseenHasBeat(exact[s], combo)) return true;
+      } else if (uc && unseenHasBeat(uc, combo)) return true;
+    }
+    return false;
+  }
+
   /* ================= 必胜链搜索 ================= */
 
   /**
@@ -987,8 +1007,13 @@
       var r = winRate(options[i]);
       if (r < 0) continue;
       if (r > 0) anyWin = true;
-      // 同胜率时偏向不被动出大牌：给一点点「代价」惩罚做平票决断
+      // 同胜率平票：除了「省大牌」外，短敌（≤4 张）压得住的候选再扣一点——
+      // 它的胜率依赖对手贪吃接牌，对手放行让队友接手时就翻盘（推演练不出
+      // 对手的聪明放行），所以平票时优先选短敌碰不了的
       var score = r - (options[i].pass ? 0 : powerOf(options[i].cards) / 400);
+      if (!options[i].pass && shortEnemyCanBeat(ctx, ctx.unseen, options[i].combo, 4)) {
+        score -= 0.02;
+      }
       if (score > bestScore) { bestScore = score; best = options[i]; }
     }
     // 一个胜局都推不出来时，说明当前策略视角下没有好棋 ——
@@ -1083,14 +1108,13 @@
       if (uc) {
         // 谁是对手压不起的，先打谁 —— 打出去还能接着出
         var safe0 = !unseenHasBeat(uc, h0), safe1 = !unseenHasBeat(uc, h1);
-        // 敌人报单：可被压的散单张领出去就是直接送掉整局（单张敌人永远压不起
-        // 多牌型），先出非单张的那一手，哪怕它会被第三家压住也只是丢先手
-        var enemyOne = false;
-        for (var e1 = 0; e1 < ctx.counts.length; e1++) {
-          if (isEnemySeat(ctx, e1) && ctx.counts[e1] === 1) { enemyOne = true; break; }
-        }
-        var risky0 = FEAT.feedGuard && enemyOne && h0.type === CT.SINGLE && !safe0;
-        var risky1 = FEAT.feedGuard && enemyOne && h1.type === CT.SINGLE && !safe1;
+        // 敌人短牌（≤4 张）：它压得住的单张/对子/三张领出去就是直接送掉整局
+        //（压住后剩牌不多，下一次领出即胜），先出它压不起的那一手，
+        // 哪怕会被第三家压住也只是丢先手
+        var risky0 = FEAT.feedGuard && shortEnemyCanBeat(ctx, uc, h0, 4) &&
+          (h0.type === CT.SINGLE || h0.type === CT.PAIR || h0.type === CT.TRIPLE);
+        var risky1 = FEAT.feedGuard && shortEnemyCanBeat(ctx, uc, h1, 4) &&
+          (h1.type === CT.SINGLE || h1.type === CT.PAIR || h1.type === CT.TRIPLE);
         if (risky0 !== risky1) first = risky0 ? 1 : 0;
         else if (safe0 !== safe1) first = safe0 ? 0 : 1;
         else if (bomb0 !== bomb1) first = (oppMin <= 3) ? (bomb0 ? 0 : 1) : (bomb0 ? 1 : 0);
@@ -1143,24 +1167,57 @@
         }
       }
 
-      // 记牌版「别送胜」（用户实测修复）：敌人报单时，任何可能被它压住的单张
-      // 领出去都是直接送掉整局 —— 单张敌人永远压不起多牌型，此时应先出
-      // 三带一/顺子等多牌型保住先手。报双的敌人吃下单张后还要再走一张，轻罚。
-      // safe（没有任何未现之牌能压）的单张不怕报单敌人，不罚。
-      // 罚分随点数递减：手牌只剩危险单张时，先出最大的那张（与两手分支一致）。
-      if (uc && FEAT.feedGuard && cd.combo.type === CT.SINGLE && !safe) {
+      // 「别送胜」硬防护（feedGuard）：引擎规则是打出最后一手立即获胜，
+      // 敌人剩 ≤4 张时，它压住任何一手后剩牌已少，下一次领出（很可能就是
+      // 最后一手）直接判胜 —— 凡是短敌压得住的领出都等于送掉整局
+      //（单张、对子都一样：对子被压后剩两张，领出即胜）。
+      // 完全信息逐家精确判定；记牌档用合并估计（保守）。
+      // 罚分随敌人剩牌数递减、随点数递减：无路可走时先出最大的那张。
+      if (uc && FEAT.feedGuard) {
+        var DANGER = [0, 130, 100, 65, 40];
         for (var o3 = 0; o3 < ctx.counts.length; o3++) {
-          if (!isEnemySeat(ctx, o3)) continue;
-          var eLeft = ctx.counts[o3];
-          if (eLeft === 1) score += 130 - cd.combo.main;
-          else if (eLeft === 2) score += 35 - cd.combo.main;
+          if (!isEnemySeat(ctx, o3) || ctx.counts[o3] > 4) continue;
+          if (shortEnemyCanBeat(ctx, uc, cd.combo, 4)) {
+            score += DANGER[ctx.counts[o3]] - cd.combo.main;
+            break;
+          }
         }
       }
 
-      // 农民配合：队友快走完了，出小单张送他
+      // 农民配合：队友快走完了，喂「他接得走」的牌
       if (cfg.teammateHelp && ctx.role === 'farmer' && ctx.teammateSeat !== undefined) {
         var tmCount = ctx.counts[ctx.teammateSeat];
-        if (tmCount <= 2 && cd.combo.type === CT.SINGLE && cd.combo.main <= 10) score -= 14;
+        if (tmCount === 1) {
+          if (cd.combo.type === CT.SINGLE && cd.combo.main <= 10) score -= 14;
+        } else if (tmCount === 2) {
+          // 队友剩 2 张：可能是对子也可能是两张单——小单张他可拆对接，小对子更直接
+          if (cd.combo.type === CT.SINGLE && cd.combo.main <= 10) score -= 14;
+          if (cd.combo.type === CT.PAIR && cd.combo.main <= 10) score -= 14;
+        }
+        // 透视档（大师）：队友剩牌结构已知，喂「对型」的牌
+        //（队友剩对子喂小对、剩单张喂比他最大的牌小的单张）；
+        // 若地主坐在我和队友之间且压得住，喂了也白喂，不加重
+        if (ctx.hands && ctx.oppCountBySeat && tmCount >= 1 && tmCount <= 2) {
+          var tmCnts = Cards.rankCounts(ctx.hands[ctx.teammateSeat]);
+          var tmMax = 0, tmPair = 0;
+          for (var tr = 3; tr <= 17; tr++) {
+            if (tmCnts[tr] > 0) tmMax = tr;
+            if (tr <= 15 && tmCnts[tr] === 2) tmPair = tr;
+          }
+          var typeMatch;
+          if (tmCount === 1) {
+            typeMatch = cd.combo.type === CT.SINGLE && cd.combo.main < tmMax;
+          } else if (tmPair > 0) {
+            typeMatch = cd.combo.type === CT.PAIR && cd.combo.main < tmPair;
+          } else {
+            typeMatch = cd.combo.type === CT.SINGLE && cd.combo.main < tmMax;
+          }
+          if (typeMatch) {
+            var lmNext = (ctx.seat + 1) % 3 === ctx.landlordSeat;
+            var lmCan = lmNext && unseenHasBeat(ctx.oppCountBySeat[ctx.landlordSeat], cd.combo);
+            if (!lmCan) score -= 40;
+          }
+        }
       }
 
       // 农民定位配合（经典打法，仅高手档）：
@@ -1248,12 +1305,16 @@
       return { cards: Cards.sortAsc(pool[0].cards.slice()), combo: pool[0].combo, tag: 'easy' };
     }
 
-    /* --- 队友出的牌：不压，把机会留给他 --- */
+    /* --- 队友出的牌：默认不压，把机会留给他 --- */
     if (isTeammate) {
       var tmLeft = ctx.counts[lastSeat];
       if (tmLeft <= 2) return null;
       var restAll = Dec.minHands(hand);
-      if (!(restAll <= 2 && ctx.difficulty === 'hard')) return null;
+      // 但我打完只剩 ≤2 手时应当接牌控场：hard 靠记牌、master 靠透视
+      // 都有资格（原先门限写死 hard，透视档反而永远不接队友的牌）
+      if (!(restAll <= 2 && (ctx.difficulty === 'hard' || ctx.difficulty === 'master'))) {
+        return null;
+      }
     }
 
     /* --- 必胜链：压住这一手之后能一路打完，直接走 --- */
@@ -1287,10 +1348,14 @@
     var myHands = Dec.minHands(hand);
     var wantLead = myHands <= 4 ? 8 : (myHands <= 6 ? 3 : 0);
 
+    // 对手剩牌越少越必须拦：剩 ≤4 张时它压住一手后下一次领出（很可能就是
+    // 最后一手）直接判胜，放行一手往往等于放行整局（用户实测：放行两对中的
+    // 第一对 → 第二对报胜）
     var threat;
     if (enemyLeft <= 1) threat = 150;
-    else if (enemyLeft <= 2) threat = 50;
-    else if (enemyLeft <= 4) threat = 16;
+    else if (enemyLeft <= 2) threat = 90;
+    else if (enemyLeft <= 3) threat = 60;
+    else if (enemyLeft <= 4) threat = 45;
     else if (enemyLeft <= 7) threat = 6;
     else threat = 2;
 
@@ -1371,12 +1436,14 @@
         for (var i = 0; i < hh.length; i++) unseen[hh[i].rank]++;
       }
       ctx.oppCounts = [];
+      ctx.oppCountBySeat = {};
       for (var s2 = 0; s2 < 3; s2++) {
         if (s2 === ctx.seat) continue;
         var oc = new Array(18).fill(0);
         var h2 = ctx.hands[s2];
         for (var i2 = 0; i2 < h2.length; i2++) oc[h2[i2].rank]++;
         ctx.oppCounts.push(oc);
+        ctx.oppCountBySeat[s2] = oc;
       }
     } else {
       unseen = unseenCounts(ctx.hand, ctx.played);
