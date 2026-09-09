@@ -79,7 +79,9 @@
     osc.type = 'sine';
     osc.frequency.setValueAtTime(130, t0);
     osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.1);
-    g.gain.setValueAtTime(vol, t0);
+    // 起音 5ms 快速爬升而非瞬时满增益：避免每小节边界（约 2.1s 一次）的咔哒瞬态
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
     osc.connect(g); g.connect(out);
     osc.start(t0); osc.stop(t0 + 0.15);
@@ -279,7 +281,11 @@
     }
     while (nextTime < now + LOOKAHEAD) {
       var evs = pat.events[step % pat.loopSteps];
-      if (evs) for (var i = 0; i < evs.length; i++) playEvent(evs[i], nextTime);
+      // 钳制到未来：定时器偶发迟到（GC/重渲染/切后台）会让 nextTime 落进
+      // 过去 0.25s 容差带，过去时间点的包络会被压缩成瞬时起音且多音堆叠
+      // —— 听感即偶发咔哒瞬态
+      var t0 = nextTime > now + 0.01 ? nextTime : now + 0.01;
+      if (evs) for (var i = 0; i < evs.length; i++) playEvent(evs[i], t0);
       // 小节边界处应用待切换的情绪，让旋律在乐句收尾时自然转换
       if (pendingMood && (step + 1) % pat.stepsPerBar === 0) {
         mood = pendingMood;
