@@ -146,6 +146,7 @@
     MjUI.renderCounter(unseenCounts());
     updateInfo();
     updateScore();
+    if (MjUI.applyDesktopTileScale) MjUI.applyDesktopTileScale();   // 胶囊/手牌渲染后重算两侧块纵向位置
   }
 
   function renderHand() {

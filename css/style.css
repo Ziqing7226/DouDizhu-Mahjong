@@ -1454,11 +1454,12 @@ body:not(.is-mobile) {
 .rv-cell { width: var(--mj-rh); height: var(--mj-rw); display: grid; place-items: center; }
 
 /* 河位：对家贴顶（让开座位胶囊，间隔 6px）、我家贴底（河→手牌 6px）、
- * 左右沿边贴顶锚定（块顶对胶囊 6px，参考手机端块对齐） */
+ * 左右沿边纵向位置由 JS 按用户定版法写入 --mj-side-top（优先牌桌内上下
+ * 居中，交叠则上移，上限 = 原标定拓扑位胶囊底+6px），副露/亮牌列同轴随动 */
 .mj-river-2 { top: 72px; left: 50%; transform: translateX(-50%); }
 .mj-river-0 { bottom: calc(var(--mj-hh) + 16px); left: 50%; transform: translateX(-50%); }
-.mj-river-1 { top: 72px; right: 12px; transform: none; }
-.mj-river-3 { top: 72px; left: 12px; transform: none; }
+.mj-river-1 { top: var(--mj-side-top-r, 72px); right: 12px; transform: none; }
+.mj-river-3 { top: var(--mj-side-top-l, 72px); left: 12px; transform: none; }
 
 /* 桌面 3×10 与副露尺寸已上收变量方案（见牌河段），不再分高低视口两套；
  * 我河/对面河无副露时维持 ±88 镜像偏移现状，有副露时按「河+副露成组
@@ -1491,10 +1492,10 @@ body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
  * 有副露时河右移 (柱宽+6)/2 成组左右居中（用户定版，见 has-melds 规则） */
 .mj-melds-2 { top: 72px; left: calc(50% + 5 * var(--mj-rw) - 2 * var(--mj-mw) + 19.5px); max-width: calc(var(--mj-mw) * 4 + 3px); }
 /* 两侧：2 竖条（每竖条 2 组）贴河视觉 6px（横置牌视觉盒比元素盒宽
- * (mh-mw)/2，河侧偏移计入凸出，用户定版拓扑），纵向居中于侧河轴线；
- * 行/列间隙 4px；行牌态链 = 河(12+3rh+8)+6，复盘态链另含亮牌列（见复盘块） */
-.mj-melds-1 { top: calc(72px + (var(--mj-rw) * 10 + 36px) / 2); right: calc(26px + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); transform: translateY(-50%); flex-flow: column wrap; gap: 4px 8px; max-height: calc(var(--mj-mh) * 8 + 14px); max-width: calc(var(--mj-mw) * 2 + 12px); }
-.mj-melds-3 { top: calc(72px + (var(--mj-rw) * 10 + 36px) / 2); left: calc(26px + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); transform: translateY(-50%); flex-flow: column wrap; gap: 4px 8px; max-height: calc(var(--mj-mh) * 8 + 14px); max-width: calc(var(--mj-mw) * 2 + 12px); }
+ * (mh-mw)/2，河侧偏移计入凸出，用户定版拓扑），纵向随侧河块（--mj-side-top），
+ * 轴线 = 块顶 + 侧河半高；行/列间隙 4px */
+.mj-melds-1 { top: calc(var(--mj-side-top-r, 72px) + (var(--mj-rw) * 10 + 36px) / 2); right: calc(26px + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); transform: translateY(-50%); flex-flow: column wrap; gap: 4px 8px; max-height: calc(var(--mj-mh) * 8 + 14px); max-width: calc(var(--mj-mw) * 2 + 12px); }
+.mj-melds-3 { top: calc(var(--mj-side-top-l, 72px) + (var(--mj-rw) * 10 + 36px) / 2); left: calc(26px + var(--mj-rh) * 3 + (var(--mj-mh) - var(--mj-mw)) / 2); transform: translateY(-50%); flex-flow: column wrap; gap: 4px 8px; max-height: calc(var(--mj-mh) * 8 + 14px); max-width: calc(var(--mj-mw) * 2 + 12px); }
 .mj-melds-0 { bottom: calc(var(--mj-hh) + 16px); right: calc(50% + 5 * var(--mj-rw) - 2 * var(--mj-mw) + 19.5px); flex-flow: column; max-width: calc(var(--mj-mw) * 4 + 3px); max-height: none; }
 /* 河+副露成组左右居中（桌面，间距 6px）：柱宽 = 4mw+3，让位 = (柱宽+6)/2 */
 .mj-table.has-melds-0 .mj-river-0 { margin-left: calc(var(--mj-mw) * 2 + 4.5px); }
@@ -1754,7 +1755,8 @@ body:not(.is-mobile) .mj-river-2 { margin-left: -88px; }
 .mj-river-3.reveal-shift { left: calc(16px + (var(--mj-ew) + var(--mj-eh)) / 2); }
 .mj-melds-2.reveal-shift { top: calc(78px + var(--mj-eh)); }
 .reveal-mode .remain-mj-2 { top: 72px; }
-.reveal-mode .remain-mj-1, .reveal-mode .remain-mj-3 { top: 72px; }
+.reveal-mode .remain-mj-1 { top: var(--mj-side-top-r, 72px); }
+.reveal-mode .remain-mj-3 { top: var(--mj-side-top-l, 72px); }
 /* 两侧副露条随牌河一起让位成 6px 链（亮牌列→河→副露，视觉宽口径）；
  * 纵向沿用基础档的侧河轴线居中（top 已在基础档按轴线计算）。
  * 桌面 min-height:700 媒体查询已废弃（变量方案统一全分辨率），

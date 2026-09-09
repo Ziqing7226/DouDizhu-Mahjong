@@ -29,6 +29,7 @@
     DOM.boxes = [el('mjBox-0'), el('mjBox-1'), el('mjBox-2'), el('mjBox-3')];
     DOM.rivers = [el('mjRiver-0'), el('mjRiver-1'), el('mjRiver-2'), el('mjRiver-3')];
     DOM.melds = [el('mjMelds-0'), el('mjMelds-1'), el('mjMelds-2'), el('mjMelds-3')];
+    applyDesktopTileScale();   // DOM 就绪后首算河牌尺寸与两侧块纵向位置
   }
 
   /* ---------------- 牌元素 ---------------- */
@@ -593,7 +594,7 @@
     { ar: 16 / 10, w0: 1280, h0: 800, CPlay: 43.6, CReveal: 41.2 },
     { ar: 3 / 2, w0: 1500, h0: 1000, CPlay: 52.6, CReveal: 49.3 },
     { ar: 4 / 3, w0: 1024, h0: 768, CPlay: 33.9, CReveal: 31.4 },
-    { ar: 21 / 9, w0: 2560, h0: 1080, CPlay: 76.9, CReveal: 72.1 }
+    { ar: 21 / 9, w0: 2560, h0: 1080, CPlay: 87.5, CReveal: 79.4 }
   ];
   function applyDesktopTileScale() {
     if (typeof document === 'undefined' || !document.body || !document.body.classList) return;
@@ -611,6 +612,78 @@
     var rw = Math.floor(C * 0.8 * factor);
     // 写到 body 内联（变量兜底块就挂在 body 上，内联优先级更高才能覆盖）
     document.body.style.setProperty('--mj-rw', rw + 'px');
+    layoutSideBlocks();
+  }
+
+  /* ---------------- 两侧块纵向位置（用户定版法） ----------------
+   * 优先在牌桌内上下居中；若居中位会与可见区域交叠，则上移至刚好不交叠；
+   * 上移上限 = 原标定拓扑位（块顶 = 胶囊底+6px，该位经标定保证不交叠）。
+   * 块 = 亮牌列（复盘态）+ 侧河 + 侧副露。底部/顶部约束做 x 带过滤：
+   * 只有 x 范围与该侧河带相交的元素才约束该侧（中央的我河/对家带不碍侧块）。 */
+  function layoutSideBlocks() {
+    if (typeof document === 'undefined' || !document.body || !document.body.classList) return;
+    if (document.body.classList.contains('is-mobile')) return;
+    var table = document.getElementById('mjTable');
+    if (!table || !document.getElementById('mjHand')) return;
+    // DOM 桩环境（无 getBoundingClientRect）下静默跳过
+    var rectOf = function (el) {
+      if (!el || typeof el.getBoundingClientRect !== 'function') return null;
+      var r = el.getBoundingClientRect();
+      return (r && typeof r.top === 'number' && typeof r.height === 'number') ? r : null;
+    };
+    var tR = rectOf(table);
+    var handR = rectOf(document.getElementById('mjHand'));
+    if (!tR || !handR) return;
+    var rw = parseFloat(document.body.style.getPropertyValue('--mj-rw')) || 40;
+    var reveal = document.body.classList.contains('reveal-mode');
+    var HRiver = 10 * rw + 36;
+    var HMelds = 9 * rw + 10;                                     // 侧副露高（2 柱，居中于河轴）
+    var HCol = reveal ? 13.23 * rw - 78 : 0;                      // 亮牌列高（14eh−78，eh=0.945rw）
+    var H = Math.max(HRiver, HMelds, HCol);
+    var sides = [
+      { key: 'r', cap: 'mjBox-1', river: 'mjRiver-1' },
+      { key: 'l', cap: 'mjBox-3', river: 'mjRiver-3' }
+    ];
+    for (var si = 0; si < sides.length; si++) {
+      var sd = sides[si];
+      var riverEl = document.getElementById(sd.river);
+      var capEl = document.getElementById(sd.cap);
+      if (!riverEl || !capEl) continue;
+      var rR = rectOf(riverEl);
+      var cR = rectOf(capEl);
+      if (!rR || !cR) continue;
+      var capBottom = cR.bottom - tR.top;
+      var topLim = capBottom + 6;                                 // 保底：胶囊底+6
+      var bandL = rR.x, bandR = rR.x + rR.width;                  // 该侧河带（最宽组件）
+      var botLim = Infinity;
+      var bots = [['mjHand', handR], ['.mj-actions', null], ['mjRiver-0', null], ['mjBox-0', null]];
+      for (var bi = 0; bi < bots.length; bi++) {
+        var el = document.getElementById(bots[bi][0]) || document.querySelector(bots[bi][0]);
+        if (!el) continue;
+        // 幻影排除：不绘制/不占位的元素不构成可见约束（用户定版口径）
+        var elSt = getComputedStyle(el);
+        if (elSt.display === 'none' || elSt.visibility === 'hidden') continue;
+        var list = [];
+        if (bots[bi][1]) list.push(handR);
+        var rr = rectOf(el);
+        if (rr) list.push(rr);
+        var tiles = el.querySelectorAll('.mtile');
+        for (var ti = 0; ti < tiles.length; ti++) {
+          var tr = rectOf(tiles[ti]);
+          if (tr) list.push(tr);
+        }
+        for (var li = 0; li < list.length; li++) {
+          var r = list[li];
+          if (r.right > bandL && r.x < bandR) botLim = Math.min(botLim, r.top - tR.top);
+        }
+      }
+      botLim -= 6;
+      var topCentered = (tR.height - H) / 2;
+      var maxTop = botLim - H;                                    // 不碰底缘的最低允许 top
+      // 居中优先；交叠则上移至刚好不交叠；上限 = 保底位
+      var top = Math.min(Math.max(topCentered, topLim), Math.max(maxTop, topLim));
+      document.body.style.setProperty('--mj-side-top-' + sd.key, top.toFixed(1) + 'px');
+    }
   }
 
   if (typeof document !== 'undefined') {
