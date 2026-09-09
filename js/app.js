@@ -121,12 +121,12 @@
   }
 
   /** 全屏建议条：仅移动端 + 横屏 + 未全屏 + 未关闭过时出现 */
-  var FS_HINT_KEY = 'doudizhu.fsHintClosed';
+  var FS_HINT_KEY = 'doudizhu.fsHintClosed';   // 会话级：×只在本次会话生效，下次打开重新提示（用户定版）
   function updateFsBanner() {
     var mobile = document.body.classList.contains('is-mobile');
     var landscape = global.innerWidth >= global.innerHeight;
     var dismissed = false;
-    try { dismissed = localStorage.getItem(FS_HINT_KEY) === '1'; } catch (e) { /* 忽略 */ }
+    try { dismissed = sessionStorage.getItem(FS_HINT_KEY) === '1'; } catch (e) { /* 忽略 */ }
     var show = mobile && landscape && !fsElement() && !dismissed;
     DOM.fsBanner.classList.toggle('show', show);
     if (!show) DOM.fsBanner.classList.remove('show-tip');
@@ -241,7 +241,7 @@
     });
     DOM.btnFsClose.addEventListener('click', function () {
       DOM.fsBanner.classList.remove('show');
-      try { localStorage.setItem(FS_HINT_KEY, '1'); } catch (e) { /* 忽略 */ }
+      try { sessionStorage.setItem(FS_HINT_KEY, '1'); } catch (e) { /* 忽略 */ }
     });
     ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
       document.addEventListener(ev, function () { syncFsButton(); updateFsBanner(); });
