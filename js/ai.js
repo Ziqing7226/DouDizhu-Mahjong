@@ -1314,15 +1314,44 @@
       return { cards: Cards.sortAsc(pool[0].cards.slice()), combo: pool[0].combo, tag: 'easy' };
     }
 
+    /* 抢挡（用户实测）：「不压队友」有一个致命例外 —— 地主坐我下家且只剩
+       ≤2 张、其剩牌压得起队友这手时，放行等于送胜：地主接走这手，报单即
+       空手获胜，报双接走后领出最后一张也即胜（引擎最后一手立即获胜）。
+       必须用一张地主压不起的牌把这手接回来，把先手留在农民手里。
+       大师档逐家透视精确判定；高手档用合并记牌保守判定（压牌须是
+       未现之牌全场无人能压的 boss，才保证不被地主反压）。
+       仅在我下游就是地主时才有此险：地主若在我上游且这手还在桌上，
+       说明他已经放行过，安全。 */
+    function teammateGuard() {
+      if (!isTeammate || !uc || ctx.landlordSeat === undefined) return null;
+      if ((ctx.seat + 1) % 3 !== ctx.landlordSeat) return null;
+      if (ctx.counts[ctx.landlordSeat] > 2) return null;
+      var lmCnt = ctx.oppCountBySeat ? ctx.oppCountBySeat[ctx.landlordSeat] : null;
+      var lmBeatsLead = lmCnt ? unseenHasBeat(lmCnt, ctx.lastCombo)
+        : unseenHasBeat(uc, ctx.lastCombo);
+      if (!lmBeatsLead) return null;
+      var pick = null, pickCost = Infinity;
+      for (var gi = 0; gi < cands.length; gi++) {
+        var g = cands[gi];
+        var lmBeatsMine = lmCnt ? unseenHasBeat(lmCnt, g.combo)
+          : unseenHasBeat(uc, g.combo);
+        if (lmBeatsMine) continue;    // 会被地主反压的压牌没有意义
+        var gc = powerOf(g.cards) +
+          ((g.combo.type === CT.BOMB || g.combo.type === CT.ROCKET) ? 50 : 0);
+        if (gc < pickCost) { pickCost = gc; pick = g; }
+      }
+      return pick ? { cards: Cards.sortAsc(pick.cards.slice()), combo: pick.combo, tag: 'guard' } : null;
+    }
+
     /* --- 队友出的牌：默认不压，把机会留给他 --- */
     if (isTeammate) {
       var tmLeft = ctx.counts[lastSeat];
-      if (tmLeft <= 2) return null;
+      if (tmLeft <= 2) return teammateGuard() || null;
       var restAll = Dec.minHands(hand);
       // 但我打完只剩 ≤2 手时应当接牌控场：hard 靠记牌、master 靠透视
       // 都有资格（原先门限写死 hard，透视档反而永远不接队友的牌）
       if (!(restAll <= 2 && (ctx.difficulty === 'hard' || ctx.difficulty === 'master'))) {
-        return null;
+        return teammateGuard() || null;
       }
     }
 
@@ -1446,14 +1475,14 @@
             return { cards: Cards.sortAsc(pressBest.cd.cards.slice()),
               combo: pressBest.cd.combo, tag: 'press' };
           }
-          return null;          // 推演认为不要更好
+          return teammateGuard() || null;   // 队友的牌同理：短地主等着截走即胜
         }
         return { cards: Cards.sortAsc(pick.cards.slice()), combo: pick.combo, tag: 'rollout' };
       }
     }
 
-    if (!best) return null;
-    if (bestScore > (FEAT.passBias || 0) && !mustBlock) return null;
+    if (!best) return teammateGuard() || null;
+    if (bestScore > (FEAT.passBias || 0) && !mustBlock) return teammateGuard() || null;
     return { cards: Cards.sortAsc(best.cards.slice()), combo: best.combo, tag: 'follow' };
   }
 
