@@ -89,7 +89,12 @@
     // 敌人报单/报双时不送可被压的散单张（用户实测：AI 手握三带一+顺子的必赢
     // 好牌，却领出散单张被对手最后一张压掉反杀 —— 单张敌人永远压不起多牌型，
     // 先出多牌型必保先手。escapeBlock 只加「惩罚」且会误伤，这里是硬防护）
-    feedGuard: true
+    feedGuard: true,
+    // 积极拦截（用户定版）：敌人领出逃牌时不轻易放行 —— 他白得一轮先手就
+    // 多顺走一张逃牌。高手档给「廉价压牌」（非炸、几乎不破结构、不动 2/王）
+    // 加成；大师档透视加码：领出的敌人本人压不回的压牌必然卡住他这一轮，
+    // 且这种确定卡牌不受贪心推演的「放行」否决
+    blockPress: true
   };
 
   /* ---------------- 难度参数 ---------------- */
@@ -356,6 +361,10 @@
       var combos = allLeadCombos(cards);
       for (var i = 0; i < combos.length; i++) {
         var cd = combos[i];
+        // 引擎规则：打出最后一手立即获胜，无人可拦 —— 最后一手
+        // 不需要是对手压不起的绝张（此前误判，导致 A→2→3 这类
+        // 以可压牌收尾的必胜残局识别失败，随后启发式先送出收尾牌）
+        if (cd.cards.length === cards.length) return true;
         if (beat(cd.combo)) continue;
         if (exists(removeLocal(cards, cd.cards))) return true;
         if (budget.n <= 0) break;
@@ -371,7 +380,7 @@
       pick: function (hand, cands) {
         for (var i = 0; i < cands.length; i++) {
           var cd = cands[i];
-          if (unseenHasBeat(uc, cd.combo)) continue;
+          if (cd.cards.length < hand.length && unseenHasBeat(uc, cd.combo)) continue;
           var rest = removeLocal(hand, cd.cards);
           if (exists(rest)) return cd;
           if (budget.n <= 0) break;
@@ -1370,6 +1379,7 @@
 
     var best = null, bestScore = Infinity;
     var fScored = [];
+    var pressBest = null;   // 透视确定「领出敌人压不回」的最低代价压牌（blockPress）
     for (var c = 0; c < cands.length; c++) {
       var cd = cands[c];
       var rest = Dec.removeCards(hand, cd.cards);
@@ -1388,6 +1398,24 @@
       var benefit = threat + wantLead;
       if (holdsLead && FEAT.holdsLead) benefit += (newHands <= 3 ? 13 : 4.5);
       if (ctx.role === 'landlord') benefit += 1.5;
+
+      /* 积极拦截（blockPress，用户实测）：敌人领出逃牌时不轻易放行 ——
+         他白得一轮先手就多顺走一张逃牌。高手档：给「压得起且代价小」的牌
+         （非炸弹、几乎不破结构、不动 2/王）加成主动顶；
+         大师档透视加码：领出的敌人本人已压不回的压牌必然卡住他这一轮。 */
+      var exactStuck = false;
+      if (uc && FEAT.blockPress && !isTeammate && !isBomb &&
+        structLoss <= 1 && cd.combo.main <= 14) {
+        benefit += 6;
+        var leaderCnt = ctx.oppCountBySeat ? ctx.oppCountBySeat[lastSeat] : null;
+        // 高手档没有逐家信息，退化为「未现之牌无人能压」（boss 牌，更保守）
+        exactStuck = leaderCnt ? !unseenHasBeat(leaderCnt, cd.combo) : holdsLead;
+        if (exactStuck) benefit += 9;
+        if (exactStuck && ctx.oppCountBySeat &&
+          (!pressBest || cost < pressBest.cost)) {
+          pressBest = { cd: cd, cost: cost };
+        }
+      }
 
       // 定位配合：下家该顶，上家省牌（除非局势危急）
       if (FEAT.position && ctx.role === 'farmer' && ctx.landlordSeat !== undefined) {
@@ -1410,7 +1438,16 @@
       options.push({ pass: true });          // 「不要」也是一个候选
       var pick = decideByRollout(ctx, options);
       if (pick) {
-        if (pick.pass) return null;          // 推演认为不要更好
+        if (pick.pass) {
+          /* 透视确定的卡牌不受推演否决：贪心续打看不见「这轮必然卡住
+             领出的敌人」（他压不回、我方代价小），只会低估拦截价值，
+             把大师场农民变成只会放行的观众 —— 这是实测主因 */
+          if (pressBest && ctx.oppCountBySeat) {
+            return { cards: Cards.sortAsc(pressBest.cd.cards.slice()),
+              combo: pressBest.cd.combo, tag: 'press' };
+          }
+          return null;          // 推演认为不要更好
+        }
         return { cards: Cards.sortAsc(pick.cards.slice()), combo: pick.combo, tag: 'rollout' };
       }
     }
